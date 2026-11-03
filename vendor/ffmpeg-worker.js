@@ -24,12 +24,25 @@ async function fetchParts(urls) {
   return bin;
 }
 
+function loadB64Parts(name) {
+  // 공개 공유용: .wasm 대신 base64를 담은 .js 조각에서 엔진을 읽어요
+  for (let i = 0; ; i++) {
+    try { importScripts(name + '.wasm.b64-' + i + '.js'); } catch (e) { if (i === 0) throw new Error('변환 엔진 파일을 받지 못했어요'); break; }
+    self.postMessage({ type: 'loadprogress', loaded: i + 1, total: 3 });
+  }
+  const bin = atob(self.__b64[name]); delete self.__b64[name];
+  const u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+
 self.onmessage = async (e) => {
   const { id, type, data } = e.data;
   try {
     if (type === 'load') {
       if (!core) {
-        const wasmBinary = await fetchParts(['ffmpeg-core-0.wasm', 'ffmpeg-core-1.wasm']);
+        let wasmBinary;
+        try { wasmBinary = await fetchParts(['ffmpeg-core-0.wasm', 'ffmpeg-core-1.wasm']); }
+        catch (_) { wasmBinary = loadB64Parts('ffmpeg-core'); }
         importScripts('ffmpeg-core.js');
         core = await self.createFFmpegCore({ wasmBinary });
         core.setLogger(({ message }) => { logs.push(message); if (logs.length > 40) logs.shift(); });

@@ -6,7 +6,11 @@ const PACK = { bilinear: true, blockAlign: false, bruteForce: false, createImage
 
 async function init() {
   if (!mod) {
+    let wasmBinary;
+    try { const r = await fetch('xatlas.wasm'); if (!r.ok) throw 0; wasmBinary = new Uint8Array(await r.arrayBuffer()); }
+    catch (_) { importScripts('xatlas.wasm.b64.js'); const bin = atob(self.__b64.xatlas); wasmBinary = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) wasmBinary[i] = bin.charCodeAt(i); }
     mod = await self.createXAtlasModule({
+      wasmBinary,
       locateFile: p => p,
       onAtlasProgress: (mode, progress) => self.postMessage({ type: 'progress', mode, progress })
     });

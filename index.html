@@ -199,6 +199,7 @@ input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px;
 .stat .v { font-family: var(--font-mono); font-weight: 600; font-size: 18px; font-variant-numeric: tabular-nums; }
 .stat .h { font-size: 12px; color: var(--muted); line-height: 1.45; }
 .actions select { width: auto; }
+.local-warn { margin: 16px 0 0; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--c-data); color: var(--ink); background: var(--surface); font-size: 14px; }
 .toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100% - 32px); z-index: 10; }
 .toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
 .hidden { display: none !important; }
@@ -272,6 +273,8 @@ async function copyText(text) {
   catch { toast("복사하지 못했어요. 직접 선택해서 복사해 주세요."); }
 }
 
+const LOCAL_FILE = location.protocol === "file:";
+const NEED_SERVER = "이 기능은 파일을 직접 열면(더블클릭) 작동하지 않아요. GitHub Pages 같은 사이트 주소로 열거나, 이 폴더에서 python -m http.server 를 실행한 뒤 http://localhost:8000 으로 열어 주세요.";
 /* ───────── 저장(다운로드) ───────── */
 const SAVE_OK = new Set("gif png jpg jpeg webp mp4 webm mov txt json md docx pptx epub csv ttf html svg pdf xlsx zip".split(" "));
 let dlPromise = null;
@@ -648,6 +651,7 @@ const FF = {
   },
   reset() { try { this.worker && this.worker.terminate(); } catch (_) {} this.worker = null; this.ready = null; },
   async run(file, outExt, args, ctx) {
+    if (LOCAL_FILE) throw new Error(NEED_SERVER);
     if (file.size > 300 * 1048576) throw new Error("파일이 너무 커요(" + fmtSize(file.size) + "). 브라우저 변환은 300MB 이하만 가능해요.");
     if (!this.ready) ctx.status("변환 엔진 받는 중… (처음 한 번만, 약 30MB)");
     this.onLoad = f => ctx.status("변환 엔진 받는 중… " + Math.round(f * 100) + "%", f * 0.3);
@@ -671,8 +675,15 @@ const fmtNum = n => Math.round(n).toLocaleString("ko-KR");
 const compact = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(n);
 async function T3lib() { await loadScript("vendor/three-bundle.js"); return window.T3; }
 let occtP = null;
+function b64ToBytes(str) { const bin = atob(str), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+async function wasmBytes(name) {
+  try { const r = await fetch("vendor/" + name + ".wasm"); if (r.ok) return new Uint8Array(await r.arrayBuffer()); } catch (_) {}
+  await loadScript("vendor/" + name + ".wasm.b64.js");
+  const u = b64ToBytes(window.__b64[name]); delete window.__b64[name]; return u;
+}
 function occtLib() {
-  if (!occtP) occtP = loadScript("vendor/occt-import-js.js").then(() => occtimportjs({ locateFile: f => "vendor/" + f })).catch(e => { occtP = null; throw e; });
+  if (LOCAL_FILE) return Promise.reject(new Error(NEED_SERVER));
+  if (!occtP) occtP = loadScript("vendor/occt-import-js.js").then(() => wasmBytes("occt-import-js")).then(bin => occtimportjs({ wasmBinary: bin, locateFile: f => "vendor/" + f })).catch(e => { occtP = null; throw e; });
   return occtP;
 }
 function baseMat(T, extra) { return new T.MeshStandardMaterial(Object.assign({ color: 0xa9b3c4, roughness: 0.55, metalness: 0.05, side: T.DoubleSide }, extra || {})); }
@@ -1136,6 +1147,7 @@ function uvTool(t) {
 const XA = {
   worker: null, seq: 0, pending: new Map(), onProgress: null,
   call(data) {
+    if (LOCAL_FILE) return Promise.reject(new Error(NEED_SERVER));
     if (!this.worker) {
       this.worker = new Worker("vendor/xatlas-worker.js");
       this.worker.onmessage = e => {
@@ -1707,6 +1719,7 @@ function renderHome() {
     empty.style.display = any ? "none" : "block";
   });
   app.replaceChildren(
+    ...(LOCAL_FILE ? [h("p", { class: "local-warn" }, "파일을 직접 열었어요. 이미지·PDF·문서·3D 변환은 되지만, 오디오·영상·STEP·UV 펴기는 사이트 주소로 열어야 작동해요.")] : []),
     h("section", { class: "hero" },
       h("h1", null, "파일 형식, 여기서 바로 바꾸세요"),
       h("p", null, "사진, PDF, 엑셀, 음악, 영상, 3D 모델까지 " + TOOLS.length + "가지 변환을 무료로. 파일을 서버에 올리지 않고 지금 쓰는 브라우저 안에서 바꿔요."),
@@ -1831,8 +1844,8 @@ function renderFileTool(t) {
     } finally {
       prog.done(); state.busy = false; go.textContent = "변환하기"; drawFiles();
     }
-    resHead.replaceChildren(h("span", null, all.length ? "결과 " + all.length + "개 · 저장 버튼을 눌러 받으세요" : "결과가 없어요"),
-      all.length > 1 ? h("button", { class: "btn small", onclick: () => saveAllZip(all, t.id + "-결과.zip") }, "전부 ZIP으로 저장") : null);
+    resHead.replaceChildren(...[h("span", null, all.length ? "결과 " + all.length + "개 · 저장 버튼을 눌러 받으세요" : "결과가 없어요"),
+      all.length > 1 ? h("button", { class: "btn small", onclick: () => saveAllZip(all, t.id + "-결과.zip") }, "전부 ZIP으로 저장") : null].filter(Boolean));
     resPanel.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 

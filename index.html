@@ -1,0 +1,2130 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval'; worker-src 'self' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; frame-src 'self' data: blob: about:; object-src 'none'; base-uri 'none'; form-action 'none'">
+<meta name="referrer" content="no-referrer">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>바꿈 파일 변환기</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+/* 레이아웃: 홈은 카테고리별 도구 목록, 도구 화면은 올리기 → 옵션 → 결과가 위에서 아래로 흐르는 한 줄 구성 */
+:root {
+  --bg: #f3f4f7;
+  --surface: #ffffff;
+  --ink: #15171c;
+  --muted: #5b6270;
+  --line: #dcdfe6;
+  --accent: #1f4fd8;
+  --accent-ink: #ffffff;
+  --accent-soft: #e6ecfc;
+  --danger: #c2352a;
+  --ok: #0f7a52;
+  --c-image: #0f7a52;
+  --c-pdf: #c2352a;
+  --c-data: #a4660f;
+  --c-audio: #7446c0;
+  --c-video: #0b6f8a;
+  --c-zip: #59606d;
+  --c-3d: #b03a7a;
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  --r: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101217; --surface: #191c23; --ink: #e9ebf0; --muted: #9ba2af; --line: #2b2f39;
+    --accent: #7d9dff; --accent-ink: #0d1430; --accent-soft: #1f2a4d; --danger: #ff8378; --ok: #4fd1a1;
+    --c-image: #4fd1a1; --c-pdf: #ff8378; --c-data: #f0b65a; --c-audio: #b99aff; --c-video: #5cc8e6; --c-zip: #a5abb7; --c-3d: #ff8cc6;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101217; --surface: #191c23; --ink: #e9ebf0; --muted: #9ba2af; --line: #2b2f39;
+  --accent: #7d9dff; --accent-ink: #0d1430; --accent-soft: #1f2a4d; --danger: #ff8378; --ok: #4fd1a1;
+  --c-image: #4fd1a1; --c-pdf: #ff8378; --c-data: #f0b65a; --c-audio: #b99aff; --c-video: #5cc8e6; --c-zip: #a5abb7; --c-3d: #ff8cc6;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.wrap { max-width: 1080px; margin: 0 auto; padding: 0 20px; }
+header.top { border-bottom: 1px solid var(--line); background: var(--surface); }
+header.top .wrap { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 60px; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font-weight: 700; font-size: 18px; letter-spacing: -0.01em; }
+.brand-mark { display: inline-grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: var(--ink); color: var(--bg); font-family: var(--font-mono); font-size: 13px; }
+.safe { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; }
+.safe::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--ok); }
+
+.hero { padding: 36px 0 12px; display: grid; gap: 16px; }
+.hero h1 { margin: 0; font-size: clamp(26px, 4vw, 36px); line-height: 1.25; letter-spacing: -0.02em; text-wrap: balance; }
+.hero p { margin: 0; color: var(--muted); max-width: 60ch; }
+.search { position: relative; max-width: 460px; }
+.search input { width: 100%; padding: 12px 14px 12px 40px; border: 1px solid var(--line); border-radius: var(--r); background: var(--surface); }
+.search svg { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--muted); }
+.quick { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.quick span { color: var(--muted); font-size: 13px; margin-right: 4px; }
+.quick a { text-decoration: none; font-family: var(--font-mono); font-size: 13px; padding: 5px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink); background: var(--surface); }
+.quick a:hover { border-color: var(--accent); color: var(--accent); }
+
+.cat { padding: 22px 0 6px; }
+.cat-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.cat-head h2 { margin: 0; font-size: 17px; }
+.cat-head .count { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.cat-head .dot { width: 10px; height: 10px; border-radius: 3px; background: var(--cc); align-self: center; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.tool-card { display: grid; gap: 6px; align-content: start; padding: 14px 16px; text-decoration: none; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); transition: border-color .15s, transform .15s; }
+.tool-card:hover { border-color: var(--cc); transform: translateY(-1px); }
+.fmt { font-family: var(--font-mono); font-weight: 600; font-size: 14px; color: var(--cc); letter-spacing: 0.01em; }
+.tool-card .t { font-weight: 700; font-size: 15px; }
+.tool-card .d { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.empty-search { color: var(--muted); padding: 24px 0; display: none; }
+
+footer { margin-top: 48px; border-top: 1px solid var(--line); padding: 20px 0 40px; color: var(--muted); font-size: 13px; }
+footer .wrap { display: grid; gap: 6px; }
+
+/* 도구 화면 */
+.tool-view { padding: 24px 0 0; display: grid; gap: 18px; }
+.back { text-decoration: none; color: var(--muted); font-size: 14px; width: fit-content; }
+.back:hover { color: var(--accent); }
+.tool-title { display: grid; gap: 4px; }
+.tool-title h1 { margin: 0; font-size: clamp(22px, 3.4vw, 30px); letter-spacing: -0.02em; text-wrap: balance; }
+.tool-title p { margin: 0; color: var(--muted); max-width: 65ch; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 18px; display: grid; gap: 14px; }
+.panel h3 { margin: 0; font-size: 14px; color: var(--muted); font-weight: 500; display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.drop { border: 1.5px dashed var(--line); border-radius: var(--r); padding: 30px 16px; text-align: center; cursor: pointer; display: grid; gap: 6px; justify-items: center; transition: border-color .15s, background .15s; background: var(--bg); }
+.drop:hover, .drop.over { border-color: var(--accent); background: var(--accent-soft); }
+.drop strong { font-size: 16px; }
+.drop span { color: var(--muted); font-size: 13px; }
+.drop .accept { font-family: var(--font-mono); font-size: 12px; }
+.files { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; }
+.file { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; display: grid; grid-template-rows: auto 1fr; background: var(--surface); min-width: 0; }
+.file.err { border-color: var(--danger); }
+.file .meta { padding: 8px 10px; display: grid; gap: 2px; font-size: 13px; min-width: 0; }
+.file .name { font-weight: 500; overflow-wrap: anywhere; line-height: 1.4; }
+.file .size { font-family: var(--font-mono); font-size: 12px; color: var(--muted); }
+.file .row { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+.file .errmsg { color: var(--danger); font-size: 12.5px; }
+.pv { aspect-ratio: 4 / 3; background: var(--bg); display: grid; place-items: center; overflow: hidden; position: relative; border-bottom: 1px solid var(--line); background-image: linear-gradient(45deg, rgba(127,127,127,.08) 25%, transparent 25%, transparent 75%, rgba(127,127,127,.08) 75%), linear-gradient(45deg, rgba(127,127,127,.08) 25%, transparent 25%, transparent 75%, rgba(127,127,127,.08) 75%); background-size: 16px 16px; background-position: 0 0, 8px 8px; }
+.pv img, .pv canvas { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.pv video { width: 100%; height: 100%; object-fit: contain; background: #000; }
+.pv audio { width: 92%; }
+.pv pre { margin: 0; padding: 8px 10px; font-family: var(--font-mono); font-size: 11px; line-height: 1.45; width: 100%; height: 100%; overflow: hidden; white-space: pre-wrap; word-break: break-all; color: var(--ink); background: var(--surface); text-align: left; }
+.pv table { border-collapse: collapse; font-size: 11px; background: var(--surface); width: 100%; align-self: start; font-variant-numeric: tabular-nums; }
+.pv td, .pv th { border-bottom: 1px solid var(--line); padding: 3px 6px; text-align: left; white-space: nowrap; max-width: 120px; overflow: hidden; text-overflow: ellipsis; }
+.pv th { font-weight: 700; background: var(--bg); }
+.pv .ph { display: grid; justify-items: center; gap: 4px; color: var(--muted); font-size: 12px; text-align: center; padding: 8px; }
+.pv .ph b { font-family: var(--font-mono); font-size: 20px; color: var(--ink); }
+.pv .badge { position: absolute; right: 6px; bottom: 6px; background: rgba(0,0,0,.65); color: #fff; font-size: 11px; padding: 1px 7px; border-radius: 999px; font-family: var(--font-mono); }
+.pv ul { margin: 0; padding: 8px 10px 8px 24px; font-size: 11.5px; width: 100%; height: 100%; overflow: hidden; background: var(--surface); text-align: left; }
+
+.opts { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 14px; }
+.opt { display: grid; gap: 6px; font-size: 14px; }
+.opt > label, .opt > .lbl { font-weight: 500; }
+.opt .hint { color: var(--muted); font-size: 12.5px; }
+select, input[type="number"], input[type="text"], textarea { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; background: var(--surface); width: 100%; }
+input[type="range"] { width: 100%; accent-color: var(--accent); }
+.checks { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.checks label { display: inline-flex; gap: 6px; align-items: center; font-family: var(--font-mono); font-size: 13px; }
+input[type="checkbox"] { accent-color: var(--accent); width: 16px; height: 16px; }
+
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 9px 16px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; font-weight: 500; font-size: 14px; text-decoration: none; color: var(--ink); white-space: nowrap; }
+.btn:hover { border-color: var(--accent); color: var(--accent); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 700; padding: 11px 22px; font-size: 15px; }
+.btn.primary:hover { filter: brightness(1.08); color: var(--accent-ink); }
+.btn.small { padding: 4px 9px; font-size: 12.5px; border-radius: 6px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn.danger:hover { border-color: var(--danger); color: var(--danger); }
+.actions { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.progress { display: none; gap: 6px; }
+.progress.on { display: grid; }
+.bar { height: 8px; border-radius: 999px; background: var(--bg); border: 1px solid var(--line); overflow: hidden; }
+.bar i { display: block; height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.progress .lbl { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.note { font-size: 13px; color: var(--muted); }
+.note.warn { color: var(--c-data); }
+
+.split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+.split textarea { min-height: 300px; font-family: var(--font-mono); font-size: 13px; line-height: 1.5; resize: vertical; }
+.split iframe { width: 100%; min-height: 300px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.pane { display: grid; gap: 8px; align-content: start; min-width: 0; }
+.pane-head { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.pane-head select { width: auto; }
+.errline { color: var(--danger); font-size: 13px; min-height: 1.2em; }
+.tablewrap { overflow: auto; max-height: 300px; border: 1px solid var(--line); border-radius: 8px; }
+.tablewrap table { border-collapse: collapse; font-size: 13px; font-variant-numeric: tabular-nums; }
+.tablewrap td, .tablewrap th { border-bottom: 1px solid var(--line); padding: 5px 10px; text-align: left; white-space: nowrap; }
+.tablewrap th { background: var(--bg); position: sticky; top: 0; }
+.tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
+.tabs button { border: 0; background: none; padding: 8px 14px; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--muted); font-weight: 500; }
+.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--accent); }
+
+.pages { display: grid; grid-template-columns: repeat(auto-fill, minmax(176px, 1fr)); gap: 10px; }
+.page { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--surface); display: grid; }
+.page.del { opacity: .4; }
+.page.del .pv { filter: grayscale(1); }
+.page .pv { aspect-ratio: 3 / 4; }
+.page .pv canvas { transition: transform .2s; }
+.page .ctrl { display: flex; justify-content: space-between; align-items: center; padding: 6px; gap: 4px; flex-wrap: wrap; }
+.page .num { font-family: var(--font-mono); font-size: 12px; color: var(--muted); padding-left: 4px; }
+
+.view3d { position: absolute; left: 6px; top: 6px; background: var(--surface); }
+.viewer { position: relative; min-height: 0; background: radial-gradient(circle at 50% 40%, var(--surface), var(--bg)); border-radius: 8px; overflow: hidden; }
+.viewer canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.viewer.tall { height: min(62vh, 560px); border: 1px solid var(--line); }
+.modal { position: fixed; inset: 0; background: rgba(8, 10, 14, .62); display: grid; place-items: center; z-index: 20; padding: 16px; }
+.modal-box { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; width: min(980px, 100%); height: min(720px, 100%); display: grid; grid-template-rows: auto 1fr auto; overflow: hidden; }
+.modal-box .viewer { border-radius: 0; }
+.modal-head, .modal-foot { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 14px; flex-wrap: wrap; }
+.modal-head { border-bottom: 1px solid var(--line); }
+.modal-head strong { overflow-wrap: anywhere; }
+.modal-foot { border-top: 1px solid var(--line); }
+.uv-split { grid-template-columns: 1fr 1fr; }
+.uv-3d { height: min(56vh, 480px); border: 1px solid var(--line); }
+.uv-wrap { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; aspect-ratio: 1; max-height: min(56vh, 480px); display: grid; place-items: center; background: var(--surface); }
+.uv-canvas { width: 100%; height: 100%; object-fit: contain; display: block; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.uv-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.stat { border: 1px solid var(--line); border-left: 4px solid var(--ok); border-radius: 8px; padding: 10px 12px; display: grid; gap: 2px; background: var(--surface); }
+.stat.warn { border-left-color: var(--c-data); }
+.stat.bad { border-left-color: var(--danger); }
+.stat .k { font-size: 12.5px; color: var(--muted); }
+.stat .v { font-family: var(--font-mono); font-weight: 600; font-size: 18px; font-variant-numeric: tabular-nums; }
+.stat .h { font-size: 12px; color: var(--muted); line-height: 1.45; }
+.actions select { width: auto; }
+.local-warn { margin: 16px 0 0; padding: 10px 14px; border-radius: 8px; border: 1px solid var(--c-data); color: var(--ink); background: var(--surface); font-size: 14px; }
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%) translateY(20px); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 8px; font-size: 14px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; max-width: calc(100% - 32px); z-index: 10; }
+.toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+.hidden { display: none !important; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+@media (max-width: 480px) { .files { grid-template-columns: repeat(2, minmax(0, 1fr)); } .wrap { padding: 0 16px; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><span class="brand-mark">⇄</span>바꿈</a>
+    <span class="safe">파일이 서버로 올라가지 않아요</span>
+  </div>
+</header>
+<main id="app" class="wrap"></main>
+<footer>
+  <div class="wrap">
+    <span>모든 변환은 지금 쓰는 브라우저 안에서 처리돼요. 파일은 이 기기 밖으로 나가지 않아요.</span>
+    <span>영상은 컴퓨터 성능에 따라 시간이 걸려요. 300MB 이하 파일을 권장해요.</span>
+  </div>
+</footer>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+"use strict";
+/* ───────── 공통 도구 ───────── */
+const $ = (s, r = document) => r.querySelector(s);
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (k === "html") el.innerHTML = v;
+    else el.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat(Infinity)) {
+    if (k == null || k === false) continue;
+    el.append(k.nodeType ? k : document.createTextNode(String(k)));
+  }
+  return el;
+}
+const extOf = n => { const i = n.lastIndexOf("."); return i < 0 ? "" : n.slice(i + 1).toLowerCase(); };
+const baseOf = n => n.replace(/\.[^./]+$/, "");
+const fmtSize = b => b < 1024 ? b + " B" : b < 1048576 ? (b / 1024).toFixed(1) + " KB" : (b / 1048576).toFixed(1) + " MB";
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let urls = [];
+const objUrl = b => { const u = URL.createObjectURL(b); urls.push(u); return u; };
+function revokeAll() { urls.forEach(u => URL.revokeObjectURL(u)); urls = []; }
+let toastTimer;
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("on"); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove("on"), 3200); }
+
+const loaded = {};
+function loadScript(src) {
+  return loaded[src] || (loaded[src] = new Promise((res, rej) => {
+    const s = document.createElement("script");
+    s.src = src; s.onload = res;
+    s.onerror = () => { delete loaded[src]; rej(new Error("필요한 파일(" + src.split("/").pop() + ")을 불러오지 못했어요. 새로고침해 주세요.")); };
+    document.head.appendChild(s);
+  }));
+}
+async function readText(file) {
+  const buf = await file.arrayBuffer();
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(buf).replace(/^﻿/, ""); }
+  catch { return new TextDecoder("euc-kr").decode(buf); }
+}
+function canvasOf(w, h) { const c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w)); c.height = Math.max(1, Math.round(h)); return c; }
+function toBlob(c, type, q) { return new Promise((res, rej) => c.toBlob(b => b ? res(b) : rej(new Error("이미지를 만들지 못했어요")), type, q)); }
+async function copyText(text) {
+  try { await navigator.clipboard.writeText(text); toast("복사했어요"); }
+  catch { toast("복사하지 못했어요. 직접 선택해서 복사해 주세요."); }
+}
+
+const LOCAL_FILE = location.protocol === "file:";
+const NEED_SERVER = "이 기능은 파일을 직접 열면(더블클릭) 작동하지 않아요. GitHub Pages 같은 사이트 주소로 열거나, 이 폴더에서 python -m http.server 를 실행한 뒤 http://localhost:8000 으로 열어 주세요.";
+/* ───────── 저장(다운로드) ───────── */
+const SAVE_OK = new Set("gif png jpg jpeg webp mp4 webm mov txt json md docx pptx epub csv ttf html svg pdf xlsx zip".split(" "));
+let dlPromise = null;
+function getDownloads() {
+  if (!dlPromise) {
+    dlPromise = (async () => {
+      try { if (window.claude && typeof window.claude.use === "function") return await window.claude.use("downloads"); }
+      catch (_) {}
+      return null;
+    })();
+  }
+  return dlPromise;
+}
+async function saveFile(name, blob) {
+  const dl = await getDownloads();
+  if (dl) {
+    const ext = extOf(name);
+    if (!SAVE_OK.has(ext)) {
+      await loadScript("vendor/jszip.min.js");
+      const z = new JSZip(); z.file(name, blob);
+      blob = await z.generateAsync({ type: "blob" });
+      name = name + ".zip";
+      toast("이 미리보기 화면에서는 " + ext.toUpperCase() + " 파일을 ZIP에 담아서 저장해요");
+    }
+    try { await dl.save({ filename: name, data: blob }); }
+    catch (e) { if (e && e.code === "declined") return; toast("저장하지 못했어요" + (e && e.message ? ": " + e.message : "")); }
+    return;
+  }
+  const a = h("a", { href: URL.createObjectURL(blob), download: name });
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+}
+async function saveAllZip(results, zipName) {
+  await loadScript("vendor/jszip.min.js");
+  const z = new JSZip();
+  const used = new Set();
+  for (const r of results) {
+    let n = r.name, i = 2;
+    while (used.has(n)) n = baseOf(r.name) + " (" + (i++) + ")." + extOf(r.name);
+    used.add(n); z.file(n, r.blob);
+  }
+  const blob = await z.generateAsync({ type: "blob" });
+  await saveFile(zipName, blob);
+}
+
+/* ───────── 미리보기 ───────── */
+const IMG_EXT = ["jpg", "jpeg", "png", "webp", "gif", "bmp", "svg", "ico", "avif"];
+const AUD_EXT = ["mp3", "wav", "m4a", "aac", "ogg", "oga", "flac", "opus", "wma"];
+const VID_EXT = ["mp4", "mov", "webm", "mkv", "avi", "m4v", "wmv", "flv", "3gp", "mpeg", "mpg", "ts"];
+const TXT_EXT = ["txt", "json", "xml", "yaml", "yml", "md", "html", "htm", "csv", "tsv", "log"];
+function placeholder(tag, sub) { return h("div", { class: "ph" }, h("b", null, tag), sub ? h("span", null, sub) : null); }
+function makePreview(blob, name) {
+  const ext = extOf(name);
+  const box = h("div", { class: "pv" });
+  if (IMG_EXT.includes(ext)) {
+    const img = h("img", { src: objUrl(blob), alt: name + " 미리보기", loading: "lazy" });
+    img.onerror = () => { img.replaceWith(placeholder(ext.toUpperCase(), "미리보기를 지원하지 않는 이미지예요")); };
+    box.append(img);
+  } else if (ext === "heic" || ext === "heif") {
+    box.append(placeholder("HEIC", "미리보기 준비 중…"));
+    heicThumb(blob).then(c => { box.innerHTML = ""; box.append(c); })
+      .catch(() => { box.innerHTML = ""; box.append(placeholder("HEIC", "변환하면 볼 수 있어요")); });
+  } else if (ext === "pdf") {
+    box.append(placeholder("PDF", "미리보기 준비 중…"));
+    pdfThumb(blob, 360).then(({ canvas, pages }) => { box.innerHTML = ""; box.append(canvas, h("span", { class: "badge" }, pages + "쪽")); })
+      .catch(() => { box.innerHTML = ""; box.append(placeholder("PDF", "미리보기를 만들 수 없어요")); });
+  } else if (AUD_EXT.includes(ext)) {
+    const a = h("audio", { controls: true, preload: "metadata", src: objUrl(blob) });
+    a.onerror = () => { a.replaceWith(placeholder(ext.toUpperCase(), "이 브라우저에서는 재생할 수 없어요")); };
+    box.append(a);
+  } else if (VID_EXT.includes(ext)) {
+    const v = h("video", { controls: true, muted: true, playsinline: true, preload: "metadata", src: objUrl(blob) });
+    v.onerror = () => { v.replaceWith(placeholder(ext.toUpperCase(), "이 브라우저에서는 재생할 수 없어요. 변환하면 볼 수 있어요")); };
+    box.append(v);
+  } else if (ext === "csv" || ext === "tsv") {
+    readText(blob.slice(0, 20000)).then(t => {
+      const rows = parseCSV(t).slice(0, 14);
+      const tb = h("table", null, rows.map((r, i) => h("tr", null, r.slice(0, 6).map(c => h(i ? "td" : "th", null, c)))));
+      box.append(tb);
+    });
+  } else if (TXT_EXT.includes(ext)) {
+    readText(blob.slice(0, 3000)).then(t => box.append(h("pre", null, t)));
+  } else if (M3D_EXT.includes(ext)) {
+    preview3D(box, blob, name);
+  } else if (ext === "usdz") {
+    box.append(placeholder("USDZ", "아이폰·아이패드에서 열면 AR로 볼 수 있어요"));
+  } else if (ext === "zip") {
+    box.append(placeholder("ZIP", "목록 읽는 중…"));
+    loadScript("vendor/jszip.min.js").then(() => JSZip.loadAsync(blob, { decodeFileName })).then(z => {
+      const names = Object.keys(z.files).filter(n => !z.files[n].dir);
+      box.innerHTML = "";
+      box.append(h("ul", null, names.slice(0, 12).map(n => h("li", null, n))), h("span", { class: "badge" }, names.length + "개"));
+    }).catch(() => { box.innerHTML = ""; box.append(placeholder("ZIP", "목록을 읽을 수 없어요")); });
+  } else {
+    box.append(placeholder((ext || "파일").toUpperCase()));
+  }
+  return box;
+}
+async function heicThumb(blob) {
+  const { src, w, h: hh, done } = await loadImg(blob, "a.heic");
+  const k = Math.min(1, 480 / Math.max(w, hh));
+  const c = canvasOf(w * k, hh * k); c.getContext("2d").drawImage(src, 0, 0, c.width, c.height); done();
+  return c;
+}
+
+/* ───────── 이미지 ───────── */
+async function loadImg(file, nameHint) {
+  const name = nameHint || file.name || "";
+  const ext = extOf(name);
+  let blob = file, isSvg = false;
+  if (ext === "heic" || ext === "heif" || /hei[cf]/i.test(file.type || "")) {
+    await loadScript("vendor/heic2any.min.js");
+    try { const r = await heic2any({ blob: file, toType: "image/png" }); blob = Array.isArray(r) ? r[0] : r; }
+    catch (e) { throw new Error("HEIC 사진을 읽지 못했어요. 파일이 손상됐을 수 있어요."); }
+  } else if (ext === "svg" || file.type === "image/svg+xml") {
+    isSvg = true;
+    blob = new Blob([await file.text()], { type: "image/svg+xml" });
+  }
+  const url = URL.createObjectURL(blob);
+  const img = new Image();
+  img.src = url;
+  try { await img.decode(); }
+  catch { URL.revokeObjectURL(url); throw new Error("이미지를 열 수 없어요. 손상됐거나 이 브라우저가 지원하지 않는 형식이에요."); }
+  let w = img.naturalWidth, hh = img.naturalHeight;
+  const svgText = isSvg ? await blob.text() : "";
+  if (isSvg && (!w || !hh || !/<svg[^>]*\swidth\s*=/i.test(svgText))) {
+    const m = svgText.match(/viewBox\s*=\s*["']\s*[-\d.]+[\s,]+[-\d.]+[\s,]+([\d.]+)[\s,]+([\d.]+)/);
+    const ratio = m ? parseFloat(m[2]) / parseFloat(m[1]) : 1;
+    w = 1024; hh = Math.round(1024 * ratio);
+  }
+  return { src: img, w, h: hh, isSvg, done: () => URL.revokeObjectURL(url) };
+}
+const MIME = { jpeg: "image/jpeg", png: "image/png", webp: "image/webp" };
+const EXT_OF_MIME = { "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp" };
+async function convertImage(file, { format, quality = 90, width = 0, scale = 100 }) {
+  const { src, w, h: hh, isSvg, done } = await loadImg(file);
+  let tw = w * scale / 100, th = hh * scale / 100;
+  if (width > 0 && (tw > width || isSvg)) { th = th * width / tw; tw = width; }
+  const c = canvasOf(tw, th), g = c.getContext("2d");
+  if (format === "jpeg") { g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); }
+  g.imageSmoothingQuality = "high";
+  g.drawImage(src, 0, 0, c.width, c.height);
+  done();
+  const blob = await toBlob(c, MIME[format], quality / 100);
+  return { blob, ext: EXT_OF_MIME[blob.type] || "png", w: c.width, h: c.height };
+}
+async function makeIco(file, sizes) {
+  const { src, w, h: hh, done } = await loadImg(file);
+  const pngs = [];
+  for (const s of sizes) {
+    const c = canvasOf(s, s), g = c.getContext("2d");
+    const k = Math.min(s / w, s / hh), dw = w * k, dh = hh * k;
+    g.imageSmoothingQuality = "high";
+    g.drawImage(src, (s - dw) / 2, (s - dh) / 2, dw, dh);
+    pngs.push({ s, buf: new Uint8Array(await (await toBlob(c, "image/png")).arrayBuffer()) });
+  }
+  done();
+  const n = pngs.length;
+  let off = 6 + 16 * n;
+  const out = new Uint8Array(off + pngs.reduce((a, p) => a + p.buf.length, 0));
+  const dv = new DataView(out.buffer);
+  dv.setUint16(0, 0, true); dv.setUint16(2, 1, true); dv.setUint16(4, n, true);
+  pngs.forEach((p, i) => {
+    const e = 6 + 16 * i;
+    out[e] = p.s >= 256 ? 0 : p.s; out[e + 1] = p.s >= 256 ? 0 : p.s;
+    dv.setUint16(e + 4, 1, true); dv.setUint16(e + 6, 32, true);
+    dv.setUint32(e + 8, p.buf.length, true); dv.setUint32(e + 12, off, true);
+    out.set(p.buf, off); off += p.buf.length;
+  });
+  return new Blob([out], { type: "image/x-icon" });
+}
+
+/* ───────── PDF ───────── */
+async function pdfjs() {
+  await loadScript("vendor/pdf.min.js");
+  // 파일을 직접 연 경우 워커를 못 만들어서, 같은 화면에서 PDF 엔진을 돌려요
+  if (LOCAL_FILE) await loadScript("vendor/pdf.worker.min.js");
+  pdfjsLib.GlobalWorkerOptions.workerSrc = "vendor/pdf.worker.min.js";
+  return pdfjsLib;
+}
+async function openPdf(blob) {
+  const lib = await pdfjs();
+  const data = new Uint8Array(await blob.arrayBuffer());
+  try { return await lib.getDocument({ data, cMapUrl: "vendor/cmaps/", cMapPacked: true, isEvalSupported: false }).promise; }
+  catch (e) { throw new Error(e && e.name === "PasswordException" ? "암호가 걸린 PDF는 열 수 없어요." : "PDF를 열 수 없어요. 파일이 손상됐을 수 있어요."); }
+}
+async function renderPage(page, scale, white) {
+  const vp = page.getViewport({ scale });
+  const c = canvasOf(vp.width, vp.height), g = c.getContext("2d");
+  if (white) { g.fillStyle = "#fff"; g.fillRect(0, 0, c.width, c.height); }
+  await page.render({ canvasContext: g, viewport: vp }).promise;
+  return c;
+}
+async function pdfThumb(blob, maxW) {
+  const doc = await openPdf(blob);
+  const page = await doc.getPage(1);
+  const vp = page.getViewport({ scale: 1 });
+  const canvas = await renderPage(page, maxW / vp.width, true);
+  const pages = doc.numPages; doc.destroy();
+  return { canvas, pages };
+}
+async function pdfLib() { await loadScript("vendor/pdf-lib.min.js"); return PDFLib; }
+async function loadPdfLib(blob) {
+  const { PDFDocument } = await pdfLib();
+  try { return await PDFDocument.load(await blob.arrayBuffer(), { ignoreEncryption: true }); }
+  catch { throw new Error("PDF를 열 수 없어요. 파일이 손상됐거나 암호가 걸려 있을 수 있어요."); }
+}
+function parseRanges(str, max) {
+  const groups = [];
+  for (const part of str.split(",").map(s => s.trim()).filter(Boolean)) {
+    const m = part.match(/^(\d+)\s*(?:[-~]\s*(\d+)?)?$/);
+    if (!m) throw new Error("페이지 범위를 이해하지 못했어요: \"" + part + "\" (예: 1-3, 5, 8-)");
+    const a = +m[1], b = m[2] ? +m[2] : (part.includes("-") || part.includes("~") ? max : a);
+    if (a < 1 || b > max || a > b) throw new Error("\"" + part + "\" 범위가 이 PDF(" + max + "쪽)에 맞지 않아요.");
+    const g = []; for (let i = a; i <= b; i++) g.push(i - 1);
+    groups.push({ label: part.replace(/\s/g, ""), pages: g });
+  }
+  if (!groups.length) throw new Error("뽑을 페이지를 입력해 주세요. (예: 1-3, 5)");
+  return groups;
+}
+
+/* ───────── 데이터 ───────── */
+function parseCSV(text, delim) {
+  text = text.replace(/^﻿/, "");
+  if (!delim) {
+    const first = text.split(/\r?\n/, 1)[0] || "";
+    const cnt = d => first.split(d).length;
+    delim = cnt("\t") > cnt(",") ? "\t" : cnt(";") > cnt(",") ? ";" : ",";
+  }
+  const rows = []; let row = [], field = "", q = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (q) {
+      if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else q = false; }
+      else field += c;
+    } else if (c === '"' && field === "") q = true;
+    else if (c === delim) { row.push(field); field = ""; }
+    else if (c === "\n" || c === "\r") { if (c === "\r" && text[i + 1] === "\n") i++; row.push(field); rows.push(row); row = []; field = ""; }
+    else field += c;
+  }
+  if (field !== "" || row.length) { row.push(field); rows.push(row); }
+  return rows.filter(r => !(r.length === 1 && r[0] === ""));
+}
+function autoType(v) {
+  if (typeof v !== "string") return v;
+  const t = v.trim();
+  if (/^-?(0|[1-9]\d{0,14})(\.\d+)?$/.test(t)) return Number(t);
+  if (t === "true") return true;
+  if (t === "false") return false;
+  if (t === "null") return null;
+  return v;
+}
+function csvToData(text) {
+  const rows = parseCSV(text);
+  if (!rows.length) return [];
+  const [hd, ...rest] = rows;
+  const keys = hd.map((k, i) => k.trim() || "col" + (i + 1));
+  return rest.map(r => Object.fromEntries(keys.map((k, i) => [k, autoType(r[i] ?? "")])));
+}
+function rowsOf(data) {
+  if (Array.isArray(data)) return data;
+  if (data && typeof data === "object") {
+    const vals = Object.values(data);
+    if (vals.length === 1 && Array.isArray(vals[0])) return vals[0];
+    if (vals.length === 1 && vals[0] && typeof vals[0] === "object") return rowsOf(vals[0]);
+    const arr = vals.find(Array.isArray);
+    if (arr) return arr;
+  }
+  return [data];
+}
+function flatten(obj, pre = "", out = {}) {
+  if (obj === null || typeof obj !== "object") { out[pre || "value"] = obj; return out; }
+  for (const [k, v] of Object.entries(obj)) {
+    const key = pre ? pre + "." + k : k;
+    if (Array.isArray(v)) out[key] = v.every(x => x === null || typeof x !== "object") ? v.join("; ") : JSON.stringify(v);
+    else if (v && typeof v === "object") flatten(v, key, out);
+    else out[key] = v;
+  }
+  return out;
+}
+function dataToTable(data) {
+  const rows = rowsOf(data).map(r => flatten(r));
+  const keys = [];
+  rows.forEach(r => Object.keys(r).forEach(k => { if (!keys.includes(k)) keys.push(k); }));
+  return { keys, rows };
+}
+function dataToCSV(data) {
+  const { keys, rows } = dataToTable(data);
+  const esc = v => { const s = v == null ? "" : String(v); return /[",\n\r]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
+  return [keys.map(esc).join(","), ...rows.map(r => keys.map(k => esc(r[k])).join(","))].join("\n");
+}
+function xmlToData(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.querySelector("parsererror")) throw new Error("XML 형식이 올바르지 않아요. 태그가 제대로 닫혔는지 확인해 주세요.");
+  const conv = el => {
+    const obj = {};
+    for (const a of el.attributes) obj["@" + a.name] = autoType(a.value);
+    const kids = [...el.children];
+    if (!kids.length) {
+      const t = el.textContent.trim();
+      if (!el.attributes.length) return autoType(t);
+      if (t) obj["#text"] = autoType(t);
+      return obj;
+    }
+    const groups = new Map();
+    for (const k of kids) { if (!groups.has(k.nodeName)) groups.set(k.nodeName, []); groups.get(k.nodeName).push(conv(k)); }
+    for (const [n, arr] of groups) obj[n] = arr.length > 1 ? arr : arr[0];
+    return obj;
+  };
+  const root = doc.documentElement;
+  return { [root.nodeName]: conv(root) };
+}
+function dataToXML(data) {
+  const safe = n => { let s = String(n).replace(/[^\p{L}\p{N}_.-]/gu, "_"); if (!/^[\p{L}_]/u.test(s)) s = "_" + s; return s; };
+  const esc = v => String(v ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  const node = (name, val, ind) => {
+    const pad = "  ".repeat(ind);
+    if (Array.isArray(val)) return pad + "<" + name + ">\n" + val.map(v => node("item", v, ind + 1)).join("") + pad + "</" + name + ">\n";
+    if (val && typeof val === "object") {
+      let attrs = "", inner = "", text = null;
+      for (const [k, v] of Object.entries(val)) {
+        if (k.startsWith("@")) attrs += " " + safe(k.slice(1)) + '="' + esc(v) + '"';
+        else if (k === "#text") text = v;
+        else if (Array.isArray(v)) inner += v.map(x => node(safe(k), x, ind + 1)).join("");
+        else inner += node(safe(k), v, ind + 1);
+      }
+      if (!inner && text == null) return pad + "<" + name + attrs + "/>\n";
+      if (!inner) return pad + "<" + name + attrs + ">" + esc(text) + "</" + name + ">\n";
+      return pad + "<" + name + attrs + ">\n" + (text != null ? pad + "  " + esc(text) + "\n" : "") + inner + pad + "</" + name + ">\n";
+    }
+    return pad + "<" + name + ">" + esc(val) + "</" + name + ">\n";
+  };
+  let root = "root", val = data;
+  if (data && typeof data === "object" && !Array.isArray(data) && Object.keys(data).length === 1) { root = Object.keys(data)[0]; val = data[root]; }
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + node(safe(root), val, 0);
+}
+async function parseData(text, fmt) {
+  if (!text.trim()) return null;
+  if (fmt === "csv") return csvToData(text);
+  if (fmt === "json") { try { return JSON.parse(text); } catch (e) { throw new Error("JSON 형식이 올바르지 않아요: " + e.message); } }
+  if (fmt === "xml") return xmlToData(text);
+  if (fmt === "yaml") { await loadScript("vendor/js-yaml.min.js"); try { return jsyaml.load(text); } catch (e) { throw new Error("YAML 형식이 올바르지 않아요: " + (e.reason || e.message)); } }
+}
+async function writeData(data, fmt) {
+  if (fmt === "csv") return dataToCSV(data);
+  if (fmt === "json") return JSON.stringify(data, null, 2);
+  if (fmt === "xml") return dataToXML(data);
+  if (fmt === "yaml") { await loadScript("vendor/js-yaml.min.js"); return jsyaml.dump(data, { lineWidth: -1 }); }
+}
+function decodeFileName(bytes) {
+  const u8 = bytes instanceof Uint8Array ? bytes : typeof bytes === "string" ? Uint8Array.from(bytes, c => c.charCodeAt(0)) : new Uint8Array(bytes);
+  try { return new TextDecoder("utf-8", { fatal: true }).decode(u8); } catch { return new TextDecoder("euc-kr").decode(u8); }
+}
+
+/* ───────── 영상·오디오 (ffmpeg.wasm) ───────── */
+const FF = {
+  worker: null, ready: null, seq: 0, pending: new Map(), onProgress: null, onLoad: null,
+  start() {
+    this.worker = new Worker("vendor/ffmpeg-worker.js");
+    this.worker.onmessage = e => {
+      const m = e.data;
+      if (m.type === "progress") { this.onProgress && this.onProgress(m.data); return; }
+      if (m.type === "loadprogress") { this.onLoad && this.onLoad(m.loaded / m.total); return; }
+      const p = this.pending.get(m.id); if (!p) return;
+      this.pending.delete(m.id);
+      m.ok ? p.res(m.data) : p.rej(new Error(m.error));
+    };
+    this.worker.onerror = e => { for (const p of this.pending.values()) p.rej(new Error("변환 엔진이 멈췄어요. 파일이 너무 크면 메모리가 부족할 수 있어요.")); this.pending.clear(); this.reset(); };
+  },
+  call(type, data, transfer) {
+    return new Promise((res, rej) => { const id = ++this.seq; this.pending.set(id, { res, rej }); this.worker.postMessage({ id, type, data }, transfer || []); });
+  },
+  load() {
+    if (!this.ready) { this.start(); this.ready = this.call("load").catch(e => { this.reset(); throw e; }); }
+    return this.ready;
+  },
+  reset() { try { this.worker && this.worker.terminate(); } catch (_) {} this.worker = null; this.ready = null; },
+  async run(file, outExt, args, ctx) {
+    if (LOCAL_FILE) throw new Error(NEED_SERVER);
+    if (file.size > 300 * 1048576) throw new Error("파일이 너무 커요(" + fmtSize(file.size) + "). 브라우저 변환은 300MB 이하만 가능해요.");
+    if (!this.ready) ctx.status("변환 엔진 받는 중… (처음 한 번만, 약 30MB)");
+    this.onLoad = f => ctx.status("변환 엔진 받는 중… " + Math.round(f * 100) + "%", f * 0.3);
+    await this.load();
+    const inName = "in." + (extOf(file.name) || "bin"), outName = "out." + outExt;
+    this.onProgress = ({ progress }) => { if (progress >= 0 && progress <= 1) ctx.status(file.name + " 변환 중… " + Math.round(progress * 100) + "%", progress); };
+    ctx.status(file.name + " 변환 중…", 0);
+    const input = await file.arrayBuffer();
+    const out = await this.call("exec", { inName, outName, input, args: [...args(inName, outName)] }, [input]);
+    return new Blob([out]);
+  }
+};
+
+/* ───────── 3D ───────── */
+const M3D_EXT = ["stl", "obj", "glb", "gltf", "ply", "fbx", "3mf", "dae", "step", "stp", "iges", "igs", "brep"];
+const M3D_ACCEPT = M3D_EXT.map(e => "." + e).join(",");
+const CAD_EXT = ["step", "stp", "iges", "igs", "brep"];
+const Z_UP = new Set(["stl", "3mf"]);
+const Y_UP = new Set(["glb", "gltf", "obj", "fbx", "dae", "usdz"]);
+const fmtNum = n => Math.round(n).toLocaleString("ko-KR");
+const compact = n => n >= 1e6 ? (n / 1e6).toFixed(1) + "M" : n >= 1e3 ? (n / 1e3).toFixed(1) + "K" : String(n);
+async function T3lib() { await loadScript("vendor/three-bundle.js"); return window.T3; }
+let occtP = null;
+function b64ToBytes(str) { const bin = atob(str), u = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+async function wasmBytes(name) {
+  try { const r = await fetch("vendor/" + name + ".wasm"); if (r.ok) return new Uint8Array(await r.arrayBuffer()); } catch (_) {}
+  await loadScript("vendor/" + name + ".wasm.b64.js");
+  const u = b64ToBytes(window.__b64[name]); delete window.__b64[name]; return u;
+}
+function occtLib() {
+  if (LOCAL_FILE) return Promise.reject(new Error(NEED_SERVER));
+  if (!occtP) occtP = loadScript("vendor/occt-import-js.js").then(() => wasmBytes("occt-import-js")).then(bin => occtimportjs({ wasmBinary: bin, locateFile: f => "vendor/" + f })).catch(e => { occtP = null; throw e; });
+  return occtP;
+}
+function baseMat(T, extra) { return new T.MeshStandardMaterial(Object.assign({ color: 0xa9b3c4, roughness: 0.55, metalness: 0.05, side: T.DoubleSide }, extra || {})); }
+function gltfJsonToGlb(text) {
+  const j = JSON.parse(text);
+  const bufs = (j.buffers || []).map(b => {
+    if (!b.uri) return new Uint8Array(0);
+    const m = b.uri.match(/^data:[^,]*;base64,(.*)$/);
+    if (!m) throw new Error("이 GLTF는 .bin 파일이 따로 있어요. 모든 데이터가 한 파일에 들어 있는 GLB로 올려 주세요.");
+    return Uint8Array.from(atob(m[1]), c => c.charCodeAt(0));
+  });
+  const offs = []; let total = 0;
+  for (const b of bufs) { offs.push(total); total = (total + b.length + 3) & ~3; }
+  const bin = new Uint8Array(total); bufs.forEach((b, i) => bin.set(b, offs[i]));
+  (j.bufferViews || []).forEach(v => { v.byteOffset = (v.byteOffset || 0) + offs[v.buffer || 0]; v.buffer = 0; });
+  if (total) j.buffers = [{ byteLength: total }]; else delete j.buffers;
+  const js = new TextEncoder().encode(JSON.stringify(j)), jl = (js.length + 3) & ~3;
+  const out = new Uint8Array(20 + jl + (total ? 8 + total : 0)), dv = new DataView(out.buffer);
+  dv.setUint32(0, 0x46546C67, true); dv.setUint32(4, 2, true); dv.setUint32(8, out.length, true);
+  dv.setUint32(12, jl, true); dv.setUint32(16, 0x4E4F534A, true); out.set(js, 20); out.fill(0x20, 20 + js.length, 20 + jl);
+  if (total) { const o = 20 + jl; dv.setUint32(o, total, true); dv.setUint32(o + 4, 0x004E4942, true); out.set(bin, o + 8); }
+  return out.buffer;
+}
+async function load3D(blob, name) {
+  const T = await T3lib();
+  const ext = extOf(name);
+  let buf = await blob.arrayBuffer();
+  const text = () => new TextDecoder().decode(buf);
+  let obj, animations = [];
+  try {
+    if (ext === "stl") {
+      const g = new T.STLLoader().parse(buf);
+      if (!g.attributes.normal) g.computeVertexNormals();
+      obj = new T.Mesh(g, baseMat(T, g.hasColors ? { vertexColors: true, color: 0xffffff } : null)); obj.name = baseOf(name);
+    } else if (ext === "obj") {
+      obj = new T.OBJLoader().parse(text());
+    } else if (ext === "ply") {
+      const g = new T.PLYLoader().parse(buf);
+      const vc = !!g.attributes.color;
+      const head = new TextDecoder().decode(buf.slice(0, 2048));
+      const fm = head.match(/element\s+face\s+(\d+)/);
+      if (g.index || (fm && +fm[1] > 0)) { if (!g.attributes.normal) g.computeVertexNormals(); obj = new T.Mesh(g, baseMat(T, vc ? { vertexColors: true, color: 0xffffff } : null)); }
+      else obj = new T.Points(g, new T.PointsMaterial({ size: 2, sizeAttenuation: false, vertexColors: vc, color: vc ? 0xffffff : 0x6b7fa8 }));
+      obj.name = baseOf(name);
+    } else if (ext === "glb" || ext === "gltf") {
+      if (ext === "gltf") buf = gltfJsonToGlb(text());
+      const cib = window.createImageBitmap;
+      const gl = await new Promise((res, rej) => {
+        window.createImageBitmap = undefined; // 이미지 태그 방식으로 텍스처를 읽도록 (보안 정책 호환)
+        try { new T.GLTFLoader().parse(buf, "", res, rej); } finally { window.createImageBitmap = cib; }
+      });
+      obj = gl.scene; animations = gl.animations || [];
+    } else if (ext === "fbx") {
+      obj = new T.FBXLoader().parse(buf, ""); animations = obj.animations || [];
+    } else if (ext === "3mf") {
+      obj = new T.ThreeMFLoader().parse(buf);
+    } else if (ext === "dae") {
+      const c = new T.ColladaLoader().parse(text(), ""); obj = c.scene; animations = c.scene.animations || [];
+    } else if (CAD_EXT.includes(ext)) {
+      const occt = await occtLib();
+      const u8 = new Uint8Array(buf);
+      const r = ext === "brep" ? occt.ReadBrepFile(u8, null) : (ext === "iges" || ext === "igs") ? occt.ReadIgesFile(u8, null) : occt.ReadStepFile(u8, null);
+      if (!r || !r.success || !r.meshes.length) throw new Error("CAD 파일에서 형상을 찾지 못했어요. 손상됐거나 면 정보가 없는 파일일 수 있어요.");
+      obj = new T.Group(); obj.name = baseOf(name);
+      for (const m of r.meshes) {
+        const g = new T.BufferGeometry();
+        g.setAttribute("position", new T.Float32BufferAttribute(m.attributes.position.array, 3));
+        if (m.attributes.normal) g.setAttribute("normal", new T.Float32BufferAttribute(m.attributes.normal.array, 3)); 
+        g.setIndex(Array.from(m.index.array));
+        if (!m.attributes.normal) g.computeVertexNormals();
+        const mesh = new T.Mesh(g, baseMat(T, m.color ? { color: new T.Color(m.color[0], m.color[1], m.color[2]) } : null));
+        mesh.name = m.name || ""; obj.add(mesh);
+      }
+    } else throw new Error("지원하지 않는 3D 형식이에요.");
+  } catch (e) {
+    if (e && /[가-힣]/.test(e.message || "")) throw e;
+    throw new Error(ext.toUpperCase() + " 파일을 읽지 못했어요. 파일이 손상됐거나 지원하지 않는 버전일 수 있어요.");
+  }
+  obj.traverse(o => { if (o.isMesh && o.geometry && o.geometry.attributes.position && !o.geometry.attributes.normal) o.geometry.computeVertexNormals(); });
+  obj.animations = animations;
+  return obj;
+}
+function displayUp(obj, name) {
+  if (!Z_UP.has(extOf(name))) return obj;
+  const g = new window.T3.Group(); g.rotation.x = -Math.PI / 2; g.add(obj); g.animations = obj.animations; return g;
+}
+function stats3D(T, obj) {
+  let tris = 0, verts = 0;
+  obj.updateMatrixWorld(true);
+  obj.traverse(o => {
+    if (!(o.isMesh || o.isPoints) || !o.geometry || !o.geometry.attributes.position) return;
+    const g = o.geometry, c = g.attributes.position.count;
+    verts += c; if (o.isMesh) tris += g.index ? g.index.count / 3 : c / 3;
+  });
+  const size = new T.Box3().setFromObject(obj).getSize(new T.Vector3());
+  return { tris: Math.round(tris), verts, size };
+}
+const fmtDim = s => [s.x, s.y, s.z].map(v => +v.toFixed(v >= 100 ? 0 : 2)).join(" × ");
+function dispose3D(obj) {
+  obj.traverse(o => {
+    if (o.geometry) o.geometry.dispose();
+    const ms = o.material ? (Array.isArray(o.material) ? o.material : [o.material]) : [];
+    ms.forEach(m => { for (const k in m) if (m[k] && m[k].isTexture) m[k].dispose(); m.dispose(); });
+  });
+}
+function stage3D(T, obj) {
+  const scene = new T.Scene();
+  scene.add(new T.HemisphereLight(0xffffff, 0x80858f, 2.2));
+  const d1 = new T.DirectionalLight(0xffffff, 2.2); d1.position.set(3, 5, 4); scene.add(d1);
+  const d2 = new T.DirectionalLight(0xffffff, 0.8); d2.position.set(-4, -2, -3); scene.add(d2);
+  scene.add(obj);
+  const box = new T.Box3().setFromObject(obj);
+  const center = box.isEmpty() ? new T.Vector3() : box.getCenter(new T.Vector3());
+  const r = Math.max(box.isEmpty() ? 1 : box.getSize(new T.Vector3()).length() / 2, 1e-6);
+  const cam = new T.PerspectiveCamera(35, 4 / 3, r / 200, r * 200);
+  const dist = r / Math.sin(T.MathUtils.degToRad(35 / 2));
+  cam.position.copy(center).add(new T.Vector3(0.9, 0.6, 1).normalize().multiplyScalar(dist * 1.02));
+  cam.lookAt(center);
+  return { scene, cam, center, r };
+}
+let thumbR = null, thumbQ = Promise.resolve();
+function thumb3D(blob, name) {
+  const job = thumbQ.then(async () => {
+    const T = await T3lib();
+    const obj = displayUp(await load3D(blob, name), name);
+    const st = stats3D(T, obj);
+    if (!thumbR) { thumbR = new T.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: true }); thumbR.outputColorSpace = T.SRGBColorSpace; }
+    thumbR.setPixelRatio(1); thumbR.setSize(480, 360, false); thumbR.setClearColor(0x000000, 0);
+    const { scene, cam } = stage3D(T, obj);
+    thumbR.render(scene, cam);
+    const c = canvasOf(480, 360); c.getContext("2d").drawImage(thumbR.domElement, 0, 0);
+    dispose3D(obj);
+    return { canvas: c, st };
+  });
+  thumbQ = job.catch(() => {});
+  return job;
+}
+function preview3D(box, blob, name) {
+  const ext = extOf(name);
+  box.append(placeholder(ext.toUpperCase(), "3D 미리보기 준비 중…"));
+  thumb3D(blob, name).then(({ canvas, st }) => {
+    box.innerHTML = "";
+    box.append(canvas, h("span", { class: "badge" }, st.tris ? "△ " + compact(st.tris) : "점 " + compact(st.verts)),
+      h("button", { class: "btn small view3d", onclick: e => { e.stopPropagation(); open3DViewer(blob, name); } }, "3D로 보기"));
+  }).catch(e => { box.innerHTML = ""; box.append(placeholder(ext.toUpperCase(), (e.message || "").length < 70 ? e.message : "미리보기를 만들 수 없어요")); });
+}
+async function createViewer(holder, obj, infoEl) {
+  const T = await T3lib();
+  const R = new T.WebGLRenderer({ antialias: true, alpha: true });
+  R.outputColorSpace = T.SRGBColorSpace; R.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); R.setClearColor(0x000000, 0);
+  holder.append(R.domElement);
+  const { scene, cam, center } = stage3D(T, obj);
+  const ctl = new T.OrbitControls(cam, R.domElement); ctl.target.copy(center); ctl.enableDamping = true; ctl.update();
+  let mixer = null;
+  if (obj.animations && obj.animations.length) { mixer = new T.AnimationMixer(obj); mixer.clipAction(obj.animations[0]).play(); }
+  const clock = new T.Clock();
+  const fit = () => { const w = holder.clientWidth || 640, hh = holder.clientHeight || 480; R.setSize(w, hh, false); cam.aspect = w / hh; cam.updateProjectionMatrix(); };
+  const ro = new ResizeObserver(fit); ro.observe(holder); fit();
+  let raf = 0, alive = true;
+  const loop = () => { if (!alive) return; raf = requestAnimationFrame(loop); if (mixer) mixer.update(clock.getDelta()); ctl.update(); R.render(scene, cam); };
+  loop();
+  if (infoEl) { const st = stats3D(T, obj); infoEl.textContent = (st.tris ? "삼각형 " + fmtNum(st.tris) + "개 · " : "점 " + fmtNum(st.verts) + "개 · ") + "크기 " + fmtDim(st.size) + (obj.animations && obj.animations.length ? " · 애니메이션 " + obj.animations.length + "개" : ""); }
+  return {
+    wire(on) { obj.traverse(o => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => { m.wireframe = on; }); }); },
+    destroy() { alive = false; cancelAnimationFrame(raf); ro.disconnect(); ctl.dispose(); restoreMats(obj); R.dispose(); dispose3D(obj); R.domElement.remove(); }
+  };
+}
+async function open3DViewer(blob, name) {
+  const holder = h("div", { class: "viewer" });
+  const info = h("span", { class: "note" }, "불러오는 중…");
+  let v = null, wireOn = false;
+  const close = () => { if (v) v.destroy(); wrap.remove(); document.removeEventListener("keydown", onKey); };
+  const onKey = e => { if (e.key === "Escape") close(); };
+  const wireBtn = h("button", { class: "btn small", onclick: () => { wireOn = !wireOn; v && v.wire(wireOn); wireBtn.textContent = wireOn ? "면으로 보기" : "선으로 보기"; } }, "선으로 보기");
+  const wrap = h("div", { class: "modal", role: "dialog", "aria-modal": "true", "aria-label": name + " 3D 보기", onclick: e => { if (e.target === wrap) close(); } },
+    h("div", { class: "modal-box" },
+      h("div", { class: "modal-head" }, h("strong", null, name), h("span", { class: "actions" }, wireBtn, h("button", { class: "btn small", onclick: close, "aria-label": "닫기" }, "닫기 ✕"))),
+      holder, h("div", { class: "modal-foot" }, info, h("span", { class: "note" }, "드래그: 회전 · 휠/두 손가락: 확대 · 오른쪽 드래그: 이동"))));
+  document.body.append(wrap); document.addEventListener("keydown", onKey);
+  try { v = await createViewer(holder, displayUp(await load3D(blob, name), name), info); }
+  catch (e) { info.textContent = e.message; }
+}
+function prep3D(T, obj, scale, up) {
+  const root = new T.Group(); root.name = obj.name || "model"; root.add(obj);
+  const s = +scale || 1; if (s !== 1) obj.scale.multiplyScalar(s);
+  if (up === "z2y") obj.rotation.x -= Math.PI / 2; else if (up === "y2z") obj.rotation.x += Math.PI / 2;
+  root.updateMatrixWorld(true);
+  return root;
+}
+function toStandard(T, root) {
+  root.traverse(o => {
+    if (!o.isMesh) return;
+    const conv = m => m.isMeshStandardMaterial ? m : new T.MeshStandardMaterial({ color: m.color ? m.color.clone() : 0xffffff, map: m.map || null, vertexColors: !!m.vertexColors, transparent: !!m.transparent, opacity: m.opacity ?? 1, side: m.side, name: m.name });
+    o.material = Array.isArray(o.material) ? o.material.map(conv) : conv(o.material);
+  });
+}
+async function export3D(root, fmt, animations) {
+  const T = await T3lib();
+  if (fmt === "glb" || fmt === "gltf") {
+    const r = await new T.GLTFExporter().parseAsync(root, { binary: fmt === "glb", animations: animations || [], onlyVisible: false });
+    return fmt === "glb" ? new Blob([r], { type: "model/gltf-binary" }) : new Blob([JSON.stringify(r)], { type: "model/gltf+json" });
+  }
+  if (fmt === "obj") return new Blob([new T.OBJExporter().parse(root)], { type: "text/plain" });
+  if (fmt === "stl") return new Blob([new T.STLExporter().parse(root, { binary: true })], { type: "model/stl" });
+  if (fmt === "ply") return new Blob([await new Promise(res => new T.PLYExporter().parse(root, res, { binary: true }))], { type: "application/octet-stream" });
+  if (fmt === "usdz") { toStandard(T, root); return new Blob([await new T.USDZExporter().parse(root)], { type: "model/vnd.usdz+zip" }); }
+  throw new Error("지원하지 않는 출력 형식이에요.");
+}
+const conv3D = fixed => async (file, o, ctx) => {
+  if (file.size > 200 * 1048576) throw new Error("3D 파일이 너무 커요(" + fmtSize(file.size) + "). 200MB 이하만 바꿀 수 있어요.");
+  const fmt = fixed || o.format, inExt = extOf(file.name);
+  ctx.status(file.name + " 읽는 중…" + (CAD_EXT.includes(inExt) ? " (CAD 엔진은 처음 한 번만 약 8MB 받아요)" : ""), 0.1);
+  const T = await T3lib();
+  const obj = await load3D(file, file.name);
+  let up = o.up || "auto";
+  if (up === "auto") up = Z_UP.has(inExt) && Y_UP.has(fmt) ? "z2y" : Y_UP.has(inExt) && Z_UP.has(fmt) ? "y2z" : "none";
+  const root = prep3D(T, obj, o.scale, up);
+  if (["glb", "gltf", "usdz", "ply"].includes(fmt)) root.traverse(o => { if (o.isMesh && !o.geometry.index && !o.isSkinnedMesh) { try { const m = T.mergeVertices(o.geometry); o.geometry.dispose(); o.geometry = m; } catch (_) {} } });
+  const st = stats3D(T, root);
+  if ((fmt === "stl" || fmt === "usdz") && !st.tris) throw new Error("면이 없는 점 데이터(포인트 클라우드)라서 " + fmt.toUpperCase() + "로 바꿀 수 없어요.");
+  ctx.status(file.name + " → " + fmt.toUpperCase() + " 만드는 중…", 0.6);
+  const blob = await export3D(root, fmt, obj.animations);
+  dispose3D(root);
+  const note = fmt === "stl" && inExt !== "stl" ? " · STL은 색·텍스처를 담지 못해요" : "";
+  return [{ name: baseOf(file.name) + "." + fmt, blob, info: (st.tris ? "삼각형 " + fmtNum(st.tris) + "개" : "점 " + fmtNum(st.verts) + "개") + note }];
+};
+const unitOpt = { key: "scale", label: "크기 단위 바꾸기", type: "select", value: "1", choices: [["1", "그대로"], ["10", "cm → mm (×10)"], ["0.1", "mm → cm (×0.1)"], ["1000", "m → mm (×1000)"], ["0.001", "mm → m (×0.001)"], ["25.4", "inch → mm (×25.4)"], ["0.0393701", "mm → inch"]] };
+const upOpt = { key: "up", label: "위쪽 방향", type: "select", value: "auto", choices: [["auto", "자동 (권장)"], ["none", "그대로 두기"], ["z2y", "Z-up → Y-up"], ["y2z", "Y-up → Z-up"]], hint: "3D 프린팅 파일(STL·3MF)은 Z축, 웹·게임 파일은 Y축이 위예요. 자동이면 알아서 맞춰요" };
+
+/* ───────── UV 확인 ───────── */
+let checkerTex = null;
+function makeChecker(T) {
+  if (checkerTex) return checkerTex;
+  const N = 8, S = 1024, c = canvasOf(S, S), g = c.getContext("2d"), cs = S / N;
+  for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+    const dark = (x + y) % 2 === 1;
+    g.fillStyle = "hsl(" + (x * 45) + "," + (dark ? 45 : 60) + "%," + (dark ? 34 : 72) + "%)";
+    g.fillRect(x * cs, y * cs, cs, cs);
+    g.fillStyle = dark ? "rgba(255,255,255,.9)" : "rgba(0,0,0,.75)";
+    g.font = "bold " + Math.round(cs * 0.36) + "px sans-serif"; g.textAlign = "center"; g.textBaseline = "middle";
+    g.fillText(String.fromCharCode(65 + x) + (N - y), x * cs + cs / 2, y * cs + cs / 2);
+  }
+  checkerTex = new T.CanvasTexture(c);
+  checkerTex.colorSpace = T.SRGBColorSpace; checkerTex.wrapS = checkerTex.wrapT = T.RepeatWrapping; checkerTex.anisotropy = 4;
+  return checkerTex;
+}
+function setChecker(T, obj, on, ch) {
+  if (on) {
+    if (obj.userData.origMats) restoreMats(obj);
+    const orig = new Map();
+    obj.traverse(o => {
+      if (!o.isMesh) return;
+      orig.set(o, o.material);
+      const hasUV = !!o.geometry.attributes[ch || "uv"];
+      let tex = makeChecker(T);
+      if (ch && ch !== "uv" && hasUV) { tex = tex.clone(); tex.channel = +ch.slice(2) || 0; tex.needsUpdate = true; }
+      const mk = () => hasUV ? new T.MeshStandardMaterial({ map: tex, roughness: 0.85, side: T.DoubleSide }) : new T.MeshStandardMaterial({ color: 0xff2bd6, roughness: 0.6, side: T.DoubleSide });
+      o.material = Array.isArray(o.material) ? o.material.map(mk) : mk();
+    });
+    obj.userData.origMats = orig;
+  } else restoreMats(obj);
+}
+function restoreMats(obj) {
+  const orig = obj.userData.origMats; if (!orig) return;
+  for (const [o, m] of orig) { (Array.isArray(o.material) ? o.material : [o.material]).forEach(x => x.dispose()); o.material = m; }
+  obj.userData.origMats = null;
+}
+function uvChannels(meshes) {
+  const set = new Set();
+  meshes.forEach(m => Object.keys(m.geometry.attributes).forEach(k => { if (/^uv\d*$/.test(k)) set.add(k); }));
+  return [...set].sort();
+}
+function analyzeUV(T, meshes, ch) {
+  // 1) UV 범위 정하기
+  let minU = Infinity, minV = Infinity, maxU = -Infinity, maxV = -Infinity, tris = 0, noUV = 0;
+  const parts = [];
+  for (const m of meshes) {
+    const g = m.geometry, p = g.attributes.position; if (!p) continue;
+    const n = Math.floor((g.index ? g.index.count : p.count) / 3);
+    const uv = g.attributes[ch];
+    if (!uv) { noUV += n; continue; }
+    for (let i = 0; i < uv.count; i++) { const u = uv.getX(i), v = uv.getY(i); if (u < minU) minU = u; if (u > maxU) maxU = u; if (v < minV) minV = v; if (v > maxV) maxV = v; }
+    parts.push({ m, g, p, uv, n }); tris += n;
+  }
+  const r = { tris, noUV, flipped: 0, zero: 0, outside: 0, stretched: 0, coverage: null, overlap: 0, range: [0, 0, 1, 1], uvs: null, flags: null, grid: null, RES: 512 };
+  if (!tris) return r;
+  let x0 = Math.min(0, Math.floor(minU + 1e-6)), y0 = Math.min(0, Math.floor(minV + 1e-6)), x1 = Math.max(1, Math.ceil(maxU - 1e-6)), y1 = Math.max(1, Math.ceil(maxV - 1e-6));
+  let span = Math.max(x1 - x0, y1 - y0);
+  if (span > 4) { x0 = 0; y0 = 0; span = 1; }
+  r.range = [x0, y0, x0 + span, y0 + span];
+  const RES = r.RES, grid = new Uint16Array(RES * RES), k = RES / span;
+  const uvs = new Float32Array(tris * 6), area = new Float32Array(tris), flags = new Uint8Array(tris);
+  const ratios = new Float32Array(tris);
+  const A = new T.Vector3(), B = new T.Vector3(), C = new T.Vector3();
+  let t = 0, pos = 0, neg = 0;
+  for (const { m, g, p, uv, n } of parts) {
+    m.updateMatrixWorld(true);
+    const idx = g.index ? g.index.array : null, mw = m.matrixWorld;
+    for (let j = 0; j < n; j++, t++) {
+      const i0 = idx ? idx[3 * j] : 3 * j, i1 = idx ? idx[3 * j + 1] : 3 * j + 1, i2 = idx ? idx[3 * j + 2] : 3 * j + 2;
+      const u0 = uv.getX(i0), v0 = uv.getY(i0), u1 = uv.getX(i1), v1 = uv.getY(i1), u2 = uv.getX(i2), v2 = uv.getY(i2);
+      uvs.set([u0, v0, u1, v1, u2, v2], t * 6);
+      const a2 = (u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0);
+      area[t] = a2;
+      A.fromBufferAttribute(p, i0).applyMatrix4(mw); B.fromBufferAttribute(p, i1).applyMatrix4(mw); C.fromBufferAttribute(p, i2).applyMatrix4(mw);
+      const a3 = B.sub(A).cross(C.sub(A)).length();
+      if (Math.abs(a2) < 1e-12) { if (a3 > 0) { r.zero++; flags[t] |= 4; } } else if (a2 > 0) pos++; else neg++;
+      ratios[t] = a3 > 0 && Math.abs(a2) >= 1e-12 ? Math.abs(a2) / a3 : NaN;
+      const e = 1e-4;
+      if (Math.min(u0, u1, u2) < -e || Math.max(u0, u1, u2) > 1 + e || Math.min(v0, v1, v2) < -e || Math.max(v0, v1, v2) > 1 + e) { r.outside++; flags[t] |= 2; }
+      // 래스터: 픽셀 중심이 삼각형 안에 있으면 +1
+      const X0 = (u0 - x0) * k, Y0 = (y0 + span - v0) * k, X1 = (u1 - x0) * k, Y1 = (y0 + span - v1) * k, X2 = (u2 - x0) * k, Y2 = (y0 + span - v2) * k;
+      const bx0 = Math.max(0, Math.floor(Math.min(X0, X1, X2))), bx1 = Math.min(RES - 1, Math.ceil(Math.max(X0, X1, X2)));
+      const by0 = Math.max(0, Math.floor(Math.min(Y0, Y1, Y2))), by1 = Math.min(RES - 1, Math.ceil(Math.max(Y0, Y1, Y2)));
+      const D = (X1 - X0) * (Y2 - Y0) - (X2 - X0) * (Y1 - Y0);
+      if (D === 0) continue;
+      for (let y = by0; y <= by1; y++) {
+        const py = y + 0.5;
+        for (let x = bx0; x <= bx1; x++) {
+          const px = x + 0.5;
+          const w0 = ((X1 - px) * (Y2 - py) - (X2 - px) * (Y1 - py)) / D;
+          const w1 = ((X2 - px) * (Y0 - py) - (X0 - px) * (Y2 - py)) / D;
+          if (w0 < 0 || w1 < 0 || w0 + w1 > 1) continue;
+          const id = y * RES + x; if (grid[id] < 65535) grid[id]++;
+        }
+      }
+    }
+  }
+  // 뒤집힌 면 = 3D 앞면 기준으로 UV 감김 방향이 반대(거울처럼 반전)인 면
+  for (let i = 0; i < tris; i++) if (area[i] <= -1e-12) { flags[i] |= 1; r.flipped++; }
+  // 늘어남: 텍셀 밀도가 중앙값의 2배 이상 차이
+  const valid = Array.from(ratios).filter(x => !Number.isNaN(x)).sort((a, b) => a - b);
+  if (valid.length) {
+    const med = valid[valid.length >> 1];
+    for (let i = 0; i < tris; i++) { const q = ratios[i] / med; if (q > 2 || q < 0.5) { flags[i] |= 8; r.stretched++; } }
+  }
+  let used = 0, over = 0;
+  for (let i = 0; i < grid.length; i++) { if (grid[i]) used++; if (grid[i] > 1) over++; }
+  r.overlap = used ? over / used : 0;
+  r.coverage = span === 1 ? used / grid.length : null;
+  Object.assign(r, { uvs, flags, grid });
+  return r;
+}
+function drawUV(canvas, r, size, opts) {
+  opts = opts || {};
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext("2d");
+  const [x0, y0, x1] = r.range, span = x1 - x0, k = size / span;
+  const css = getComputedStyle(document.documentElement);
+  const bg = opts.print ? "#ffffff" : css.getPropertyValue("--surface").trim() || "#fff";
+  const ink = opts.print ? "#111111" : css.getPropertyValue("--ink").trim() || "#111";
+  g.fillStyle = bg; g.fillRect(0, 0, size, size);
+  // 격자
+  g.strokeStyle = opts.print ? "rgba(0,0,0,.08)" : "rgba(127,127,127,.18)"; g.lineWidth = 1;
+  for (let i = 1; i < span * 8; i++) { const p = Math.round(i * size / (span * 8)) + 0.5; g.beginPath(); g.moveTo(p, 0); g.lineTo(p, size); g.moveTo(0, p); g.lineTo(size, p); g.stroke(); }
+  const X = u => (u - x0) * k, Y = v => (y0 + span - v) * k;
+  if (r.uvs) {
+    const n = r.tris, U = r.uvs, F = r.flags;
+    // 뒤집힌 면
+    if (!opts.print) {
+      g.fillStyle = "rgba(245,150,20,.45)"; g.beginPath();
+      for (let i = 0; i < n; i++) if (F[i] & 1) { const o = i * 6; g.moveTo(X(U[o]), Y(U[o + 1])); g.lineTo(X(U[o + 2]), Y(U[o + 3])); g.lineTo(X(U[o + 4]), Y(U[o + 5])); g.closePath(); }
+      g.fill();
+    }
+    if (r.grid && !opts.print) {
+    const RES = r.RES, img = new ImageData(RES, RES);
+    for (let i = 0; i < r.grid.length; i++) {
+      const v = r.grid[i]; if (!v) continue;
+      const o = i * 4;
+      if (v > 1) { img.data[o] = 230; img.data[o + 1] = 40; img.data[o + 2] = 40; img.data[o + 3] = 170; }
+      else { img.data[o] = 60; img.data[o + 1] = 110; img.data[o + 2] = 230; img.data[o + 3] = 40; }
+    }
+    const tmp = canvasOf(RES, RES); tmp.getContext("2d").putImageData(img, 0, 0);
+    g.imageSmoothingEnabled = false; g.drawImage(tmp, 0, 0, size, size);
+  }
+    g.strokeStyle = ink; g.globalAlpha = opts.print ? 0.9 : Math.max(0.25, Math.min(0.85, 3000 / n)); g.lineWidth = Math.max(1, size / 2048);
+    g.beginPath();
+    for (let i = 0; i < n; i++) { const o = i * 6; g.moveTo(X(U[o]), Y(U[o + 1])); g.lineTo(X(U[o + 2]), Y(U[o + 3])); g.lineTo(X(U[o + 4]), Y(U[o + 5])); g.closePath(); }
+    g.stroke(); g.globalAlpha = 1;
+  }
+  // 0–1 영역 테두리
+  g.strokeStyle = opts.print ? "#000" : (css.getPropertyValue("--accent").trim() || "#1f4fd8"); g.lineWidth = Math.max(1.5, size / 600);
+  g.strokeRect(X(0) + 0.5, Y(1) + 0.5, k - 1, k - 1);
+}
+function uvTool(t) {
+  const holder = h("div", { class: "viewer uv-3d" });
+  const uvCanvas = h("canvas", { class: "uv-canvas", role: "img", "aria-label": "UV 레이아웃" });
+  const meshSel = h("select", { id: "uv-mesh", "aria-label": "확인할 메시" });
+  const chSel = h("select", { id: "uv-ch", "aria-label": "UV 채널" });
+  const stats = h("div", { class: "uv-stats" });
+  const panel = h("div", { class: "panel hidden" });
+  const title = h("strong");
+  const info = h("span", { class: "note" });
+  let v = null, obj = null, meshes = [], last = null, fname = "model", checkerOn = true;
+  const chkBtn = h("button", { class: "btn small", onclick: () => { checkerOn = !checkerOn; applyChecker(); } });
+  const wireBtn = h("button", { class: "btn small" }, "선으로 보기"); let wireOn = false;
+  wireBtn.onclick = () => { wireOn = !wireOn; v && v.wire(wireOn); wireBtn.textContent = wireOn ? "면으로 보기" : "선으로 보기"; };
+  function applyChecker() {
+    if (!obj) return;
+    setChecker(window.T3, obj, checkerOn, chSel.value || "uv");
+    if (wireOn && v) v.wire(true);
+    chkBtn.textContent = checkerOn ? "원래 재질로 보기" : "체커 무늬로 보기";
+  }
+  const pill = (state, label, value, hint) => h("div", { class: "stat " + state, title: hint || null }, h("span", { class: "k" }, label), h("span", { class: "v" }, value), hint ? h("span", { class: "h" }, hint) : null);
+  function run() {
+    const T = window.T3;
+    const sel = meshSel.value === "all" ? meshes : [meshes[+meshSel.value]];
+    const ch = chSel.value || "uv";
+    const r = analyzeUV(T, sel, ch); last = r;
+    const pct = x => (x * 100).toFixed(x < 0.1 ? 1 : 0) + "%";
+    const items = [];
+    if (!r.tris) {
+      items.push(pill("bad", "UV", "없음", "이 메시에는 UV가 없어서 텍스처를 입힐 수 없어요. 3D 화면의 분홍색 부분이에요."));
+    } else {
+      items.push(pill(r.noUV ? "warn" : "ok", "UV 있는 면", fmtNum(r.tris) + "개", r.noUV ? "UV가 없는 면도 " + fmtNum(r.noUV) + "개 있어요 (분홍색)" : "모든 면에 UV가 있어요"));
+      items.push(pill(r.overlap > 0.01 ? "warn" : "ok", "겹침", pct(r.overlap), r.overlap > 0.01 ? "빨간 부분. 대칭 모델을 일부러 겹친 게 아니라면 텍스처가 두 곳에 똑같이 찍혀요" : "겹치는 곳이 거의 없어요"));
+      items.push(pill(r.flipped ? "warn" : "ok", "뒤집힌 면", fmtNum(r.flipped) + "개", r.flipped ? "주황색 부분. 거울처럼 반전돼 글자·무늬가 뒤집혀 보여요" : "방향이 모두 같아요"));
+      items.push(pill(r.outside ? "warn" : "ok", "0–1 범위 밖", fmtNum(r.outside) + "개", r.outside ? "파란 사각형 밖의 면. 타일링·UDIM 용도가 아니라면 텍스처가 반복돼 보여요" : "모두 0–1 안에 있어요"));
+      items.push(pill(r.stretched / r.tris > 0.1 ? "warn" : "ok", "늘어난 면", pct(r.stretched / r.tris), "다른 면보다 텍스처가 2배 이상 늘어나거나 줄어든 면의 비율. 체커 칸 크기가 다르게 보이는 곳이에요"));
+      items.push(pill(r.zero ? "warn" : "ok", "뭉개진 면", fmtNum(r.zero) + "개", r.zero ? "UV 면적이 0이라 텍스처가 한 줄로 늘어져 보여요" : "없어요"));
+      if (r.coverage != null) items.push(pill(r.coverage < 0.45 ? "warn" : "ok", "사용 면적", pct(r.coverage), r.coverage < 0.45 ? "0–1 공간의 절반 이상이 비어 있어요. 텍스처 해상도가 낭비돼요" : "0–1 공간을 잘 쓰고 있어요"));
+    }
+    stats.replaceChildren(...items);
+    drawUV(uvCanvas, r, 1024);
+    applyChecker();
+  }
+  async function open(fs) {
+    const f = fs[0]; if (!f) return;
+    if (!acceptsFile(M3D_ACCEPT, f)) { toast("지원하는 3D 파일이 아니에요"); return; }
+    if (v) { v.destroy(); v = null; }
+    panel.classList.remove("hidden"); title.textContent = f.name; fname = baseOf(f.name); info.textContent = "불러오는 중…"; stats.replaceChildren();
+    try {
+      const T = await T3lib();
+      obj = displayUp(await load3D(f, f.name), f.name);
+      meshes = []; obj.traverse(o => { if (o.isMesh && o.geometry && o.geometry.attributes.position) meshes.push(o); });
+      if (!meshes.length) throw new Error("면이 있는 메시가 없어요. 점 데이터에는 UV가 없어요.");
+      meshSel.replaceChildren(h("option", { value: "all" }, "전체 메시 (" + meshes.length + "개)"), ...meshes.map((m, i) => h("option", { value: i }, (m.name || "메시 " + (i + 1)) + " · △" + compact(Math.floor((m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position.count) / 3)))));
+      const chs = uvChannels(meshes);
+      chSel.replaceChildren(...(chs.length ? chs : ["uv"]).map(c => h("option", { value: c }, c === "uv" ? "UV 1 (기본)" : "UV " + (+c.slice(2) + 1))));
+      chSel.disabled = chs.length < 2;
+      v = await createViewer(holder, obj, info);
+      run();
+    } catch (e) { info.textContent = e.message; }
+  }
+  meshSel.onchange = run; chSel.onchange = run;
+  cleanup = () => { if (v) v.destroy(); };
+  panel.append(
+    h("div", { class: "pane-head" }, title, h("span", { class: "actions" }, h("label", { for: "uv-mesh", class: "note" }, "메시"), meshSel, h("label", { for: "uv-ch", class: "note" }, "채널"), chSel)),
+    h("div", { class: "split uv-split" },
+      h("div", { class: "pane" }, h("div", { class: "pane-head" }, h("span", null, "3D"), h("span", { class: "actions" }, chkBtn, wireBtn)), holder, info),
+      h("div", { class: "pane" }, h("div", { class: "pane-head" }, h("span", null, "UV 레이아웃"),
+          h("button", { class: "btn small", onclick: () => { if (!last) return; const c = canvasOf(10, 10); drawUV(c, last, 2048, { print: true }); toBlob(c, "image/png").then(b => saveFile(fname + "-uv.png", b)); } }, "레이아웃 PNG 저장")),
+        h("div", { class: "uv-wrap" }, uvCanvas),
+        h("div", { class: "legend" }, h("span", null, h("i", { style: "background:rgba(60,110,230,.35)" }), "사용 영역"), h("span", null, h("i", { style: "background:rgba(230,40,40,.7)" }), "겹침"), h("span", null, h("i", { style: "background:rgba(245,150,20,.7)" }), "뒤집힘"), h("span", null, h("i", { style: "background:transparent;border:2px solid var(--accent)" }), "0–1 범위")))),
+    stats);
+  chkBtn.textContent = "원래 재질로 보기";
+  app.replaceChildren(h("div", { class: "tool-view" }, ...toolHeader(t), dropZone(M3D_ACCEPT, false, open, "UV를 확인할 3D 파일을 끌어다 놓거나 눌러서 고르세요"), panel));
+}
+
+/* ───────── UV 펴기 ───────── */
+const XA = {
+  worker: null, seq: 0, pending: new Map(), onProgress: null,
+  call(data) {
+    if (LOCAL_FILE) return Promise.reject(new Error(NEED_SERVER));
+    if (!this.worker) {
+      this.worker = new Worker("vendor/xatlas-worker.js");
+      this.worker.onmessage = e => {
+        const m = e.data;
+        if (m.type === "progress") { this.onProgress && this.onProgress(m.mode, m.progress); return; }
+        const p = this.pending.get(m.id); if (!p) return;
+        this.pending.delete(m.id); m.ok ? p.res(m) : p.rej(new Error(m.error));
+      };
+      this.worker.onerror = () => {
+        for (const p of this.pending.values()) p.rej(new Error("UV 엔진이 멈췄어요. 모델이 너무 크면 메모리가 부족할 수 있어요."));
+        this.pending.clear(); try { this.worker.terminate(); } catch (_) {} this.worker = null;
+      };
+    }
+    return new Promise((res, rej) => {
+      const id = ++this.seq; this.pending.set(id, { res, rej });
+      const tr = []; data.meshes.forEach(m => tr.push(m.positions.buffer, m.indices.buffer));
+      this.worker.postMessage(Object.assign({ id }, data), tr);
+    });
+  }
+};
+function meshesOf(root) { const l = []; root.updateMatrixWorld(true); root.traverse(o => { if (o.isMesh && o.geometry && o.geometry.attributes.position) l.push(o); }); return l; }
+function cornersOf(g) {
+  const n = g.index ? g.index.count : g.attributes.position.count, m = n - n % 3, ci = new Uint32Array(m);
+  if (g.index) { const a = g.index.array; for (let i = 0; i < m; i++) ci[i] = a[i]; } else for (let i = 0; i < m; i++) ci[i] = i;
+  return ci;
+}
+function worldCorners(T, mesh, ci) {
+  const p = mesh.geometry.attributes.position, mw = mesh.matrixWorld, v = new T.Vector3();
+  const vw = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) { v.fromBufferAttribute(p, i).applyMatrix4(mw); vw[3 * i] = v.x; vw[3 * i + 1] = v.y; vw[3 * i + 2] = v.z; }
+  return vw;
+}
+function rebuildWithUV(T, g, ci, cuv, channel) {
+  const map = new Map(), src = [], uvs = [], index = new Uint32Array(ci.length);
+  for (let c = 0; c < ci.length; c++) {
+    const ov = ci[c], u = cuv[2 * c], v = cuv[2 * c + 1];
+    const key = ov + "|" + Math.round(u * 1e6) + "|" + Math.round(v * 1e6);
+    let ni = map.get(key);
+    if (ni === undefined) { ni = src.length; map.set(key, ni); src.push(ov); uvs.push(u, v); }
+    index[c] = ni;
+  }
+  const copyAttr = a => {
+    const sz = a.itemSize, n = src.length;
+    if (a.isInterleavedBufferAttribute || a.normalized) {
+      const out = new Float32Array(n * sz), get = ["getX", "getY", "getZ", "getW"];
+      for (let i = 0; i < n; i++) for (let k = 0; k < sz; k++) out[i * sz + k] = a[get[k]](src[i]);
+      return new T.BufferAttribute(out, sz);
+    }
+    const out = new a.array.constructor(n * sz);
+    for (let i = 0; i < n; i++) for (let k = 0; k < sz; k++) out[i * sz + k] = a.array[src[i] * sz + k];
+    return new T.BufferAttribute(out, sz, a.normalized);
+  };
+  const ng = new T.BufferGeometry();
+  for (const [name, a] of Object.entries(g.attributes)) if (name !== channel) ng.setAttribute(name, copyAttr(a));
+  ng.setAttribute(channel, new T.Float32BufferAttribute(uvs, 2));
+  for (const [name, arr] of Object.entries(g.morphAttributes || {})) ng.morphAttributes[name] = arr.map(copyAttr);
+  ng.morphTargetsRelative = g.morphTargetsRelative;
+  ng.setIndex(new T.BufferAttribute(src.length > 65535 ? index : Uint16Array.from(index), 1));
+  (g.groups || []).forEach(gr => ng.addGroup(gr.start, gr.count, gr.materialIndex));
+  ng.name = g.name; ng.userData = Object.assign({}, g.userData);
+  ng.computeBoundingBox(); ng.computeBoundingSphere();
+  return ng;
+}
+async function autoUnwrap(T, meshes, opt, status) {
+  // 1) 전체 크기 기준 용접 허용 오차
+  const box = new T.Box3(); meshes.forEach(m => box.expandByObject(m));
+  const tol = Math.max(box.getSize(new T.Vector3()).length() * 1e-6, 1e-9);
+  const jobs = [], parts = [];
+  for (const [mi, m] of meshes.entries()) {
+    const ci = cornersOf(m.geometry), vw = worldCorners(T, m, ci);
+    const keyMap = new Map(), vmap = new Int32Array(vw.length / 3).fill(-1), wpos = [], widx = new Uint32Array(ci.length);
+    for (let c = 0; c < ci.length; c++) {
+      const vi = ci[c]; let w = vmap[vi];
+      if (w < 0) {
+        const x = vw[3 * vi], y = vw[3 * vi + 1], z = vw[3 * vi + 2];
+        const key = Math.round(x / tol) + "," + Math.round(y / tol) + "," + Math.round(z / tol);
+        w = keyMap.get(key); if (w === undefined) { w = wpos.length / 3; keyMap.set(key, w); wpos.push(x, y, z); }
+        vmap[vi] = w;
+      }
+      widx[c] = w;
+    }
+    // 2) 정점 65,000개 이하 조각으로 나누기
+    const triCount = ci.length / 3;
+    let local = new Map(), lpos = [], lidx = [], t0 = 0;
+    const flush = t1 => {
+      if (!lidx.length) return;
+      jobs.push({ positions: new Float32Array(lpos), indices: Uint16Array.from(lidx) });
+      parts.push({ mi, t0, t1, lidx: Uint16Array.from(lidx) });
+      local = new Map(); lpos = []; lidx = [];
+    };
+    for (let t = 0; t < triCount; t++) {
+      let add = 0; for (let k = 0; k < 3; k++) if (!local.has(widx[3 * t + k])) add++;
+      if (local.size + add > 65000) { flush(t); t0 = t; }
+      for (let k = 0; k < 3; k++) {
+        const w = widx[3 * t + k]; let l = local.get(w);
+        if (l === undefined) { l = local.size; local.set(w, l); lpos.push(wpos[3 * w], wpos[3 * w + 1], wpos[3 * w + 2]); }
+        lidx.push(l);
+      }
+    }
+    flush(triCount);
+    m.userData._ci = ci;
+  }
+  if (!jobs.length) throw new Error("펼칠 면이 없어요.");
+  const quality = Object.assign({ fixWinding: true }, { fast: { maxIterations: 1 }, normal: { maxIterations: 2 }, best: { maxIterations: 4 } }[opt.quality] || {});
+  const res = await XA.call({ meshes: jobs, chart: quality, pack: { padding: +opt.padding, resolution: +opt.resolution, bruteForce: opt.quality === "best" } });
+  let mxUV = 0; res.out.forEach(o => { for (let i = 0; i < o.uv.length; i++) if (o.uv[i] > mxUV) mxUV = o.uv[i]; });
+  const W = mxUV > 1.001 ? (res.atlas.width || 1) : 1, H = mxUV > 1.001 ? (res.atlas.height || 1) : 1;
+  const cuvs = meshes.map(m => new Float32Array(m.userData._ci.length * 2));
+  let mismatch = 0;
+  res.out.forEach((o, j) => {
+    const p = parts[j], cuv = cuvs[p.mi];
+    const nTri = p.t1 - p.t0;
+    for (let tt = 0; tt < nTri; tt++) for (let k = 0; k < 3; k++) {
+      const li = 3 * tt + k;
+      const ni = o.index[li];
+      if (ni === undefined || o.xref[ni] !== p.lidx[li]) mismatch++;
+      const c = 3 * (p.t0 + tt) + k;
+      cuv[2 * c] = o.uv[2 * ni] / W; cuv[2 * c + 1] = o.uv[2 * ni + 1] / H;
+    }
+    // 아일랜드(차트)마다 거울처럼 뒤집혔으면 제자리에서 좌우 반전
+    const nV = o.xref.length, par = new Int32Array(nV); for (let i = 0; i < nV; i++) par[i] = i;
+    const find = x => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x]; } return x; };
+    for (let tt = 0; tt < nTri; tt++) { const a = find(o.index[3 * tt]), b = find(o.index[3 * tt + 1]), d = find(o.index[3 * tt + 2]); par[b] = a; par[find(d)] = a; }
+    const info = new Map();
+    for (let tt = 0; tt < nTri; tt++) {
+      const c0 = 3 * (p.t0 + tt), r = find(o.index[3 * tt]);
+      const u0 = cuv[2 * c0], v0 = cuv[2 * c0 + 1], u1 = cuv[2 * c0 + 2], v1 = cuv[2 * c0 + 3], u2 = cuv[2 * c0 + 4], v2 = cuv[2 * c0 + 5];
+      let e = info.get(r); if (!e) { e = { a: 0, mn: Infinity, mx: -Infinity }; info.set(r, e); }
+      e.a += (u1 - u0) * (v2 - v0) - (u2 - u0) * (v1 - v0);
+      e.mn = Math.min(e.mn, u0, u1, u2); e.mx = Math.max(e.mx, u0, u1, u2);
+    }
+    for (let tt = 0; tt < nTri; tt++) {
+      const e = info.get(find(o.index[3 * tt])); if (e.a >= 0) continue;
+      for (let k = 0; k < 3; k++) { const c = 3 * (p.t0 + tt) + k; cuv[2 * c] = e.mn + e.mx - cuv[2 * c]; }
+    }
+  });
+  if (mismatch) throw new Error("UV를 펼치는 중 면 순서가 맞지 않았어요. 깨진 면이 많은 모델일 수 있어요.");
+  return { cuvs, atlas: res.atlas };
+}
+function projectUnwrap(T, meshes, method, axisOpt, zUp) {
+  const box = new T.Box3(); meshes.forEach(m => box.expandByObject(m));
+  const size = box.getSize(new T.Vector3()), mn = box.min, ctr = box.getCenter(new T.Vector3());
+  const S = Math.max(size.x, size.y, size.z) || 1;
+  const dims = [size.x, size.y, size.z];
+  let axis = { x: 0, y: 1, z: 2 }[axisOpt];
+  if (axis === undefined) {
+    if (method === "planar") axis = dims.indexOf(Math.min(...dims));
+    else if (method === "cylinder") axis = dims.indexOf(Math.max(...dims));
+    else axis = zUp ? 2 : 1;
+  }
+  const others = [0, 1, 2].filter(a => a !== axis);
+  const cuvs = [];
+  const A = new T.Vector3(), B = new T.Vector3(), C = new T.Vector3(), N = new T.Vector3();
+  for (const m of meshes) {
+    const ci = cornersOf(m.geometry), vw = worldCorners(T, m, ci), cuv = new Float32Array(ci.length * 2);
+    m.userData._ci = ci;
+    const P = (vi, k) => vw[3 * vi + k];
+    for (let t = 0; t < ci.length / 3; t++) {
+      const i0 = ci[3 * t], i1 = ci[3 * t + 1], i2 = ci[3 * t + 2];
+      if (method === "box") {
+        A.set(P(i0, 0), P(i0, 1), P(i0, 2)); B.set(P(i1, 0), P(i1, 1), P(i1, 2)); C.set(P(i2, 0), P(i2, 1), P(i2, 2));
+        N.subVectors(B, A).cross(C.clone().sub(A));
+        const an = [Math.abs(N.x), Math.abs(N.y), Math.abs(N.z)], d = an.indexOf(Math.max(...an)), neg = N.getComponent(d) < 0;
+        const k = 1 / 3 - 0.02, col = d, row = neg ? 1 : 0;
+        for (let q = 0; q < 3; q++) {
+          const vi = ci[3 * t + q];
+          const X = (P(vi, 0) - mn.x) / S, Y = (P(vi, 1) - mn.y) / S, Z = (P(vi, 2) - mn.z) / S;
+          const sx = size.x / S, sz = size.z / S;
+          let u, v;
+          if (d === 0) { u = neg ? Z : sz - Z; v = Y; }
+          else if (d === 1) { u = X; v = neg ? Z : sz - Z; }
+          else { u = neg ? sx - X : X; v = Y; }
+          cuv[2 * (3 * t + q)] = col / 3 + 0.01 + u * k;
+          cuv[2 * (3 * t + q) + 1] = row * 0.5 + 0.01 + v * k;
+        }
+      } else if (method === "planar") {
+        const [a, b] = others, ea = dims[a] / S, eb = dims[b] / S;
+        for (let q = 0; q < 3; q++) {
+          const vi = ci[3 * t + q];
+          cuv[2 * (3 * t + q)] = (P(vi, a) - mn.getComponent(a)) / S + (1 - ea) / 2;
+          cuv[2 * (3 * t + q) + 1] = (P(vi, b) - mn.getComponent(b)) / S + (1 - eb) / 2;
+        }
+      } else {
+        const [a, b] = others, us = [];
+        for (let q = 0; q < 3; q++) {
+          const vi = ci[3 * t + q];
+          const pa = P(vi, a) - ctr.getComponent(a), pb = P(vi, b) - ctr.getComponent(b), ph = P(vi, axis) - ctr.getComponent(axis);
+          const u = Math.atan2(pb, pa) / (2 * Math.PI) + 0.5;
+          let v;
+          if (method === "cylinder") v = (P(vi, axis) - mn.getComponent(axis)) / (dims[axis] || 1);
+          else { const r = Math.hypot(pa, pb, ph) || 1; v = 0.5 + Math.asin(Math.max(-1, Math.min(1, ph / r))) / Math.PI; }
+          us.push(u); cuv[2 * (3 * t + q) + 1] = v;
+        }
+        if (Math.max(...us) - Math.min(...us) > 0.5) for (let q = 0; q < 3; q++) if (us[q] < 0.5) us[q] += 1;
+        for (let q = 0; q < 3; q++) cuv[2 * (3 * t + q)] = us[q];
+      }
+    }
+    cuvs.push(cuv);
+  }
+  if (method === "cylinder" || method === "sphere") {
+    let mx = 1; cuvs.forEach(c => { for (let i = 0; i < c.length; i += 2) if (c[i] > mx) mx = c[i]; });
+    cuvs.forEach(c => { for (let i = 0; i < c.length; i += 2) c[i] /= mx; });
+  }
+  return { cuvs };
+}
+function fixMirror(cuvs) {
+  let pos = 0, neg = 0;
+  for (const c of cuvs) for (let t = 0; t < c.length / 6; t++) {
+    const o = t * 6, a = (c[o + 2] - c[o]) * (c[o + 5] - c[o + 1]) - (c[o + 4] - c[o]) * (c[o + 3] - c[o + 1]);
+    if (a > 1e-14) pos++; else if (a < -1e-14) neg++;
+  }
+  if (neg > pos) for (const c of cuvs) for (let i = 0; i < c.length; i += 2) c[i] = 1 - c[i];
+}
+function uvReport(r) {
+  const pct = x => (x * 100).toFixed(x < 0.1 ? 1 : 0) + "%";
+  const pill = (state, label, value, hint) => h("div", { class: "stat " + state }, h("span", { class: "k" }, label), h("span", { class: "v" }, value), hint ? h("span", { class: "h" }, hint) : null);
+  if (!r.tris) return [pill("bad", "UV", "없음", "이 메시에는 UV가 없어요. 3D 화면의 분홍색 부분이에요.")];
+  const items = [
+    pill(r.overlap > 0.01 ? "warn" : "ok", "겹침", pct(r.overlap), r.overlap > 0.01 ? "빨간 부분. 텍스처가 두 곳에 똑같이 찍혀요" : "겹치는 곳이 거의 없어요"),
+    pill(r.flipped ? "warn" : "ok", "뒤집힌 면", fmtNum(r.flipped) + "개", r.flipped ? "주황색 부분. 거울처럼 반전돼 보여요" : "방향이 모두 같아요"),
+    pill(r.outside ? "warn" : "ok", "0–1 범위 밖", fmtNum(r.outside) + "개", r.outside ? "파란 사각형 밖의 면이에요" : "모두 0–1 안에 있어요"),
+    pill(r.stretched / r.tris > 0.1 ? "warn" : "ok", "늘어난 면", pct(r.stretched / r.tris), "다른 면보다 텍스처가 2배 이상 늘어나거나 줄어든 면의 비율"),
+  ];
+  if (r.coverage != null) items.push(pill(r.coverage < 0.45 ? "warn" : "ok", "사용 면적", pct(r.coverage), r.coverage < 0.45 ? "0–1 공간의 절반 이상이 비어 있어요" : "0–1 공간을 잘 쓰고 있어요"));
+  return items;
+}
+function unwrapTool(t) {
+  const state = { file: null, obj: null, wrapper: null, v: null, channel: "uv", hasUV: false, result: null, fmt: "glb",
+    opts: { method: "auto", target: "add", quality: "normal", resolution: "1024", padding: "4", axis: "auto" } };
+  const holder = h("div", { class: "viewer uv-3d" });
+  const uvCanvas = h("canvas", { class: "uv-canvas", role: "img", "aria-label": "펼친 UV 레이아웃" });
+  const stats = h("div", { class: "uv-stats" });
+  const info = h("span", { class: "note" });
+  const title = h("strong");
+  const optsBox = h("div", { class: "opts" });
+  const panel = h("div", { class: "panel hidden" });
+  const resPanel = h("div", { class: "panel hidden" });
+  const prog = progressBox();
+  const go = h("button", { class: "btn primary" }, "UV 펴기");
+  const fmtSel = h("select", { id: "uw-fmt", "aria-label": "저장 형식", onchange: e => { state.fmt = e.target.value; } }, [["glb", "GLB"], ["gltf", "GLTF"], ["obj", "OBJ"], ["usdz", "USDZ"]].map(([v, l]) => h("option", { value: v }, l)));
+  const saveNote = h("span", { class: "note" });
+  const OPTS = [
+    { key: "method", label: "펴는 방식", choices: [["auto", "자동 펼치기 (권장)"], ["box", "박스 투영 (각진 모델)"], ["planar", "평면 투영 (바닥·벽)"], ["cylinder", "원통 투영 (병·기둥)"], ["sphere", "구 투영 (공 모양)"]], hint: "투영 방식은 빠르지만 모양이 복잡하면 면이 겹칠 수 있어요" },
+    { key: "target", label: "새 UV 넣을 곳", show: () => state.hasUV, choices: [["add", "두 번째 채널에 추가 (기존 텍스처 유지)"], ["replace", "기존 UV 덮어쓰기"]], hint: "덮어쓰면 원래 텍스처가 맞지 않게 돼요" },
+    { key: "quality", label: "품질", show: o => o.method === "auto", choices: [["fast", "빠르게"], ["normal", "보통"], ["best", "꼼꼼히 (느림)"]] },
+    { key: "resolution", label: "텍스처 크기 기준", show: o => o.method === "auto", choices: [["512", "512px"], ["1024", "1024px"], ["2048", "2048px"], ["4096", "4096px"]], hint: "이 크기에 맞춰 아일랜드 간격을 잡아요" },
+    { key: "padding", label: "아일랜드 간격", show: o => o.method === "auto", choices: [["2", "2px (촘촘)"], ["4", "4px"], ["8", "8px (넉넉)"], ["16", "16px"]] },
+    { key: "axis", label: "투영 축", show: o => ["planar", "cylinder", "sphere"].includes(o.method), choices: [["auto", "자동"], ["x", "X축"], ["y", "Y축"], ["z", "Z축"]] },
+  ];
+  function drawOpts() {
+    optsBox.replaceChildren(...OPTS.filter(o => !o.show || o.show(state.opts)).map(o => h("div", { class: "opt" },
+      h("label", { for: "uw-" + o.key }, o.label),
+      h("select", { id: "uw-" + o.key, onchange: e => { state.opts[o.key] = e.target.value; drawOpts(); } }, o.choices.map(([v, l]) => h("option", { value: v, selected: state.opts[o.key] === v }, l))),
+      o.hint ? h("span", { class: "hint" }, o.hint) : null)));
+  }
+  async function show(obj, ch) {
+    if (state.v) { state.v.destroy(); state.v = null; }
+    const T = window.T3;
+    state.wrapper = displayUp(obj, state.file.name);
+    const meshes = meshesOf(state.wrapper);
+    state.v = await createViewer(holder, state.wrapper, info);
+    setChecker(T, state.wrapper, true, ch);
+    const r = analyzeUV(T, meshes, ch);
+    drawUV(uvCanvas, r, 1024);
+    stats.replaceChildren(...uvReport(r));
+    state.result = r;
+  }
+  async function open(fs) {
+    const f = fs[0]; if (!f) return;
+    if (!acceptsFile(M3D_ACCEPT, f)) { toast("지원하는 3D 파일이 아니에요"); return; }
+    state.file = f; title.textContent = f.name; info.textContent = "불러오는 중…"; resPanel.classList.add("hidden");
+    panel.classList.remove("hidden");
+    try {
+      await T3lib();
+      const obj = await load3D(f, f.name);
+      const ms = meshesOf(obj);
+      if (!ms.length) throw new Error("면이 있는 메시가 없어요. 점 데이터는 UV를 펼 수 없어요.");
+      state.hasUV = ms.some(m => m.geometry.attributes.uv);
+      state.opts.target = state.hasUV ? "add" : "replace";
+      drawOpts();
+      resPanel.classList.remove("hidden");
+      $("#uw-head", resPanel).textContent = state.hasUV ? "지금 UV (펴기 전)" : "지금은 UV가 없어요 (분홍색)";
+      await show(obj, "uv");
+      saveBtn.disabled = true;
+    } catch (e) { info.textContent = e.message; toast(e.message); }
+  }
+  go.addEventListener("click", async () => {
+    if (!state.file) return;
+    go.disabled = true;
+    try {
+      const T = await T3lib();
+      prog.set("모델 다시 읽는 중…", 0.05);
+      const obj = await load3D(state.file, state.file.name);
+      obj.updateMatrixWorld(true);
+      const meshes = meshesOf(obj);
+      const tris = meshes.reduce((a, m) => a + cornersOf(m.geometry).length / 3, 0);
+      const ch = state.hasUV && state.opts.target === "add" ? "uv1" : "uv";
+      let out;
+      if (state.opts.method === "auto") {
+        prog.set("UV 자동 펼치는 중… (삼각형 " + fmtNum(tris) + "개" + (tris > 100000 ? ", 큰 모델이라 시간이 걸려요" : "") + ")", 0.15);
+        let ticks = 0;
+        XA.onProgress = () => { ticks++; prog.set("UV 자동 펼치는 중… " + ["조각 나누는 중", "펼치는 중", "배치하는 중"][Math.min(2, Math.floor(ticks / 40))], Math.min(0.9, 0.15 + ticks / 200)); };
+        out = await autoUnwrap(T, meshes, state.opts);
+      } else {
+        prog.set("투영하는 중…", 0.5);
+        out = projectUnwrap(T, meshes, state.opts.method, state.opts.axis, Z_UP.has(extOf(state.file.name)));
+      }
+      fixMirror(out.cuvs);
+      prog.set("모델에 UV 넣는 중…", 0.92);
+      meshes.forEach((m, i) => { const ng = rebuildWithUV(T, m.geometry, m.userData._ci, out.cuvs[i], ch); m.geometry.dispose(); m.geometry = ng; delete m.userData._ci; });
+      state.obj = obj; state.channel = ch;
+      $("#uw-head", resPanel).textContent = "펼친 결과 · " + (ch === "uv1" ? "UV 2 채널 (기존 UV는 그대로)" : "UV 1 채널");
+      await show(obj, ch);
+      saveBtn.disabled = false;
+      saveNote.textContent = ch === "uv1" ? "OBJ·USDZ는 UV를 한 채널만 저장해요. 새 UV까지 담으려면 GLB·GLTF로 저장하거나 '기존 UV 덮어쓰기'를 고르세요." : "";
+      resPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) { toast(e.message); info.textContent = e.message; }
+    prog.done(); go.disabled = false;
+  });
+  const saveBtn = h("button", { class: "btn primary", disabled: true }, "저장");
+  saveBtn.addEventListener("click", async () => {
+    if (!state.obj) return;
+    saveBtn.disabled = true;
+    try {
+      const T = window.T3, obj = state.obj;
+      restoreMats(state.wrapper);
+      const parent = obj.parent; if (parent) parent.remove(obj);
+      const root = new T.Group(); root.add(obj); root.updateMatrixWorld(true);
+      let blob;
+      try { blob = await export3D(root, state.fmt, obj.animations); }
+      finally { root.remove(obj); if (parent) parent.add(obj); state.wrapper.updateMatrixWorld(true); setChecker(T, state.wrapper, true, state.channel); }
+      await saveFile(baseOf(state.file.name) + "-uv." + state.fmt, blob);
+    } catch (e) { toast("저장하지 못했어요: " + e.message); }
+    saveBtn.disabled = false;
+  });
+  cleanup = () => { if (state.v) state.v.destroy(); };
+  panel.append(h("h3", null, title), optsBox, h("div", { class: "actions" }, go, h("span", { class: "note" }, "기존 파일은 바뀌지 않아요. 결과를 확인한 뒤 저장하세요.")), prog.el);
+  resPanel.append(h("h3", null, h("span", { id: "uw-head" })),
+    h("div", { class: "split uv-split" },
+      h("div", { class: "pane" }, h("div", { class: "pane-head" }, h("span", null, "3D · 체커 무늬")), holder, info),
+      h("div", { class: "pane" }, h("div", { class: "pane-head" }, h("span", null, "UV 레이아웃"),
+          h("button", { class: "btn small", onclick: () => { if (!state.result) return; const c = canvasOf(10, 10); drawUV(c, state.result, 2048, { print: true }); toBlob(c, "image/png").then(b => saveFile(baseOf(state.file.name) + "-uv.png", b)); } }, "레이아웃 PNG 저장")),
+        h("div", { class: "uv-wrap" }, uvCanvas),
+        h("div", { class: "legend" }, h("span", null, h("i", { style: "background:rgba(60,110,230,.35)" }), "사용 영역"), h("span", null, h("i", { style: "background:rgba(230,40,40,.7)" }), "겹침"), h("span", null, h("i", { style: "background:rgba(245,150,20,.7)" }), "뒤집힘")))),
+    stats,
+    h("div", { class: "actions" }, h("label", { for: "uw-fmt", class: "note" }, "저장 형식"), fmtSel, saveBtn, saveNote));
+  drawOpts();
+  app.replaceChildren(h("div", { class: "tool-view" }, ...toolHeader(t), dropZone(M3D_ACCEPT, false, open, "UV를 펼 3D 파일을 끌어다 놓거나 눌러서 고르세요"), panel, resPanel));
+}
+
+/* ───────── 도구 목록 ───────── */
+const CATS = [
+  { id: "image", name: "이미지", color: "var(--c-image)" },
+  { id: "pdf", name: "PDF", color: "var(--c-pdf)" },
+  { id: "data", name: "문서·데이터", color: "var(--c-data)" },
+  { id: "audio", name: "오디오", color: "var(--c-audio)" },
+  { id: "video", name: "비디오", color: "var(--c-video)" },
+  { id: "3d", name: "3D", color: "var(--c-3d)" },
+];
+const IMG_ACCEPT = "image/*,.heic,.heif,.svg,.bmp,.webp,.avif";
+const AUD_ACCEPT = "audio/*," + AUD_EXT.map(e => "." + e).join(",") + ",video/*";
+const VID_ACCEPT = "video/*," + VID_EXT.map(e => "." + e).join(",");
+const qualityOpt = { key: "quality", label: "품질", type: "range", min: 40, max: 100, value: 90, suffix: "%", show: o => o.format !== "png" };
+const imgEach = (fixedFormat) => async (file, o) => {
+  const format = fixedFormat || o.format;
+  const r = await convertImage(file, { format, quality: o.quality, width: +o.width || 0 });
+  return [{ name: baseOf(file.name) + "." + r.ext, blob: r.blob, info: r.w + "×" + r.h }];
+};
+const TOOLS = [
+  // 이미지
+  { id: "heic-to-jpg", cat: "image", fmt: "HEIC → JPG", title: "아이폰 사진(HEIC)을 JPG로", desc: "아이폰 사진을 윈도우·카톡 어디서나 열리는 JPG로 바꿔요.", accept: ".heic,.heif", options: [qualityOpt], each: imgEach("jpeg") },
+  { id: "webp-to-jpg", cat: "image", fmt: "WEBP → JPG", title: "WEBP를 JPG로", desc: "웹에서 받은 WEBP 이미지를 일반 JPG로 바꿔요.", accept: ".webp", options: [qualityOpt], each: imgEach("jpeg") },
+  { id: "png-to-jpg", cat: "image", fmt: "PNG → JPG", title: "PNG를 JPG로", desc: "용량이 큰 PNG를 가벼운 JPG로. 투명한 부분은 흰색이 돼요.", accept: ".png", options: [qualityOpt], each: imgEach("jpeg") },
+  { id: "jpg-to-png", cat: "image", fmt: "JPG → PNG", title: "JPG를 PNG로", desc: "화질 손실 없는 PNG로 바꿔요.", accept: ".jpg,.jpeg", each: imgEach("png") },
+  { id: "svg-to-png", cat: "image", fmt: "SVG → PNG", title: "SVG를 PNG로", desc: "벡터 아이콘·로고를 원하는 크기의 PNG로 바꿔요.", accept: ".svg",
+    options: [{ key: "width", label: "가로 크기", type: "select", value: "1024", choices: [["512", "512px"], ["1024", "1024px"], ["2048", "2048px"], ["4096", "4096px"]] }],
+    each: async (file, o) => { const r = await convertImage(file, { format: "png", width: +o.width }); return [{ name: baseOf(file.name) + ".png", blob: r.blob, info: r.w + "×" + r.h }]; } },
+  { id: "image-convert", cat: "image", fmt: "모든 이미지 ⇄ JPG·PNG·WEBP", title: "이미지 형식 바꾸기", desc: "JPG, PNG, WEBP, HEIC, SVG, BMP, GIF를 원하는 형식으로.", accept: IMG_ACCEPT,
+    options: [{ key: "format", label: "바꿀 형식", type: "select", value: "jpeg", choices: [["jpeg", "JPG"], ["png", "PNG"], ["webp", "WEBP"]] }, qualityOpt,
+      { key: "width", label: "가로 최대 크기 (선택)", type: "number", value: "", placeholder: "원본 그대로", hint: "입력하면 그보다 큰 이미지만 줄여요" }],
+    each: imgEach() },
+  { id: "image-compress", cat: "image", fmt: "이미지 용량 줄이기", title: "이미지 용량·크기 줄이기", desc: "사진 크기와 품질을 조절해서 용량을 확 줄여요.", accept: IMG_ACCEPT,
+    options: [{ key: "width", label: "가로 최대 크기", type: "select", value: "1920", choices: [["0", "원본 크기 유지"], ["3840", "3840px (4K)"], ["1920", "1920px (FHD)"], ["1280", "1280px"], ["800", "800px"]] },
+      { key: "quality", label: "품질", type: "range", min: 30, max: 95, value: 75, suffix: "%" },
+      { key: "format", label: "저장 형식", type: "select", value: "jpeg", choices: [["jpeg", "JPG (가장 호환성 좋음)"], ["webp", "WEBP (가장 가벼움)"]] }],
+    each: async (file, o) => {
+      const r = await convertImage(file, { format: o.format, quality: o.quality, width: +o.width });
+      const pct = Math.round((1 - r.blob.size / file.size) * 100);
+      return [{ name: baseOf(file.name) + "-small." + r.ext, blob: r.blob, info: r.w + "×" + r.h + (pct > 0 ? " · " + pct + "% 줄었어요" : "") }];
+    } },
+  { id: "png-to-ico", cat: "image", fmt: "PNG → ICO", title: "파비콘(ICO) 만들기", desc: "로고 이미지로 웹사이트 파비콘 ICO 파일을 만들어요.", accept: IMG_ACCEPT,
+    options: [{ key: "sizes", label: "포함할 크기", type: "checks", value: ["16", "32", "48"], choices: ["16", "32", "48", "64", "128", "256"] }],
+    each: async (file, o) => { const sizes = (o.sizes || []).map(Number).sort((a, b) => a - b); if (!sizes.length) throw new Error("크기를 하나 이상 골라 주세요."); return [{ name: baseOf(file.name) + ".ico", blob: await makeIco(file, sizes), info: sizes.join(", ") + "px" }]; } },
+  { id: "image-base64", cat: "image", fmt: "이미지 ⇄ Base64", title: "이미지 ⇄ Base64", desc: "이미지를 코드에 바로 넣는 Base64 문자열로, 또는 그 반대로.", custom: base64Tool },
+
+  // PDF
+  { id: "pdf-to-jpg", cat: "pdf", fmt: "PDF → JPG·PNG", title: "PDF를 이미지로", desc: "PDF의 각 페이지를 JPG나 PNG 이미지로 바꿔요.", accept: ".pdf",
+    options: [{ key: "format", label: "이미지 형식", type: "select", value: "jpeg", choices: [["jpeg", "JPG"], ["png", "PNG"]] },
+      { key: "scale", label: "해상도", type: "select", value: "2", choices: [["1", "보통 (72dpi)"], ["2", "선명 (144dpi)"], ["3", "인쇄용 (216dpi)"]] },
+      { key: "pages", label: "페이지 (선택)", type: "text", value: "", placeholder: "전체", hint: "예: 1-3, 5" }],
+    each: async (file, o, ctx) => {
+      const doc = await openPdf(file);
+      const list = o.pages.trim() ? parseRanges(o.pages, doc.numPages).flatMap(g => g.pages) : [...Array(doc.numPages).keys()];
+      const out = [];
+      for (const [i, p] of list.entries()) {
+        ctx.status(file.name + " · " + (p + 1) + "쪽 그리는 중 (" + (i + 1) + "/" + list.length + ")", i / list.length);
+        const c = await renderPage(await doc.getPage(p + 1), +o.scale, true);
+        const blob = await toBlob(c, MIME[o.format], 0.92);
+        out.push({ name: baseOf(file.name) + "-" + (p + 1) + (o.format === "png" ? ".png" : ".jpg"), blob, info: c.width + "×" + c.height });
+      }
+      doc.destroy();
+      return out;
+    } },
+  { id: "jpg-to-pdf", cat: "pdf", fmt: "JPG·PNG → PDF", title: "이미지를 PDF로", desc: "사진 여러 장을 순서대로 PDF 하나로 묶어요.", accept: IMG_ACCEPT, sortable: true,
+    options: [{ key: "size", label: "페이지 크기", type: "select", value: "fit", choices: [["fit", "이미지 크기 그대로"], ["a4", "A4 (방향 자동)"]] },
+      { key: "margin", label: "여백", type: "select", value: "0", choices: [["0", "없음"], ["20", "좁게"], ["40", "넓게"]], show: o => o.size === "a4" },
+      { key: "name", label: "파일 이름", type: "text", value: "", placeholder: "images" }],
+    all: async (files, o, ctx) => {
+      const { PDFDocument } = await pdfLib();
+      const pdf = await PDFDocument.create();
+      for (const [i, f] of files.entries()) {
+        ctx.status(f.name + " 넣는 중 (" + (i + 1) + "/" + files.length + ")", i / files.length);
+        const ext = extOf(f.name);
+        let img;
+        if (ext === "jpg" || ext === "jpeg") img = await pdf.embedJpg(await f.arrayBuffer());
+        else if (ext === "png") img = await pdf.embedPng(await f.arrayBuffer());
+        else { const r = await convertImage(f, { format: "jpeg", quality: 92 }); img = await pdf.embedJpg(await r.blob.arrayBuffer()); }
+        if (o.size === "fit") { const pg = pdf.addPage([img.width * 0.75, img.height * 0.75]); pg.drawImage(img, { x: 0, y: 0, width: pg.getWidth(), height: pg.getHeight() }); }
+        else {
+          const land = img.width > img.height, W = land ? 841.89 : 595.28, H = land ? 595.28 : 841.89, m = +o.margin;
+          const k = Math.min((W - 2 * m) / img.width, (H - 2 * m) / img.height);
+          const pg = pdf.addPage([W, H]);
+          pg.drawImage(img, { x: (W - img.width * k) / 2, y: (H - img.height * k) / 2, width: img.width * k, height: img.height * k });
+        }
+      }
+      return [{ name: (o.name.trim() || "images") + ".pdf", blob: new Blob([await pdf.save()], { type: "application/pdf" }), info: files.length + "쪽" }];
+    } },
+  { id: "pdf-merge", cat: "pdf", fmt: "PDF + PDF", title: "PDF 합치기", desc: "PDF 여러 개를 원하는 순서대로 하나로 합쳐요.", accept: ".pdf", sortable: true, minFiles: 2,
+    options: [{ key: "name", label: "파일 이름", type: "text", value: "", placeholder: "merged" }],
+    all: async (files, o, ctx) => {
+      const { PDFDocument } = await pdfLib();
+      const out = await PDFDocument.create();
+      for (const [i, f] of files.entries()) {
+        ctx.status(f.name + " 합치는 중 (" + (i + 1) + "/" + files.length + ")", i / files.length);
+        const src = await loadPdfLib(f);
+        (await out.copyPages(src, src.getPageIndices())).forEach(p => out.addPage(p));
+      }
+      return [{ name: (o.name.trim() || "merged") + ".pdf", blob: new Blob([await out.save()], { type: "application/pdf" }), info: out.getPageCount() + "쪽" }];
+    } },
+  { id: "pdf-split", cat: "pdf", fmt: "PDF ✂ 나누기", title: "PDF 나누기·페이지 뽑기", desc: "모든 페이지를 한 장씩 나누거나, 원하는 페이지만 뽑아요.", accept: ".pdf",
+    options: [{ key: "mode", label: "나누는 방법", type: "select", value: "each", choices: [["each", "한 장씩 전부 나누기"], ["pick", "원하는 페이지만 뽑아서 하나로"], ["ranges", "범위마다 따로 파일로"]] },
+      { key: "pages", label: "페이지", type: "text", value: "1-3", placeholder: "예: 1-3, 5, 8-", hint: "쉼표로 구분해요. 8- 은 8쪽부터 끝까지", show: o => o.mode !== "each" }],
+    each: async (file, o, ctx) => {
+      const { PDFDocument } = await pdfLib();
+      const src = await loadPdfLib(file);
+      const n = src.getPageCount();
+      const groups = o.mode === "each" ? [...Array(n).keys()].map(i => ({ label: String(i + 1), pages: [i] }))
+        : o.mode === "pick" ? [{ label: o.pages.replace(/\s/g, ""), pages: parseRanges(o.pages, n).flatMap(g => g.pages) }]
+        : parseRanges(o.pages, n);
+      const out = [];
+      for (const [i, g] of groups.entries()) {
+        ctx.status(file.name + " 나누는 중 (" + (i + 1) + "/" + groups.length + ")", i / groups.length);
+        const d = await PDFDocument.create();
+        (await d.copyPages(src, g.pages)).forEach(p => d.addPage(p));
+        out.push({ name: baseOf(file.name) + "-" + g.label.replace(/,/g, "_") + ".pdf", blob: new Blob([await d.save()], { type: "application/pdf" }), info: g.pages.length + "쪽" });
+      }
+      return out;
+    } },
+  { id: "pdf-pages", cat: "pdf", fmt: "PDF 페이지 정리", title: "PDF 페이지 회전·삭제·순서 바꾸기", desc: "페이지를 보면서 돌리고, 지우고, 순서를 바꿔요.", custom: pdfPagesTool },
+
+  // 문서·데이터
+  { id: "excel-csv", cat: "data", fmt: "XLSX ⇄ CSV", title: "엑셀 ⇄ CSV", desc: "엑셀 파일은 CSV로, CSV는 엑셀로 바꿔요. 한글 깨짐도 막아줘요.", accept: ".xlsx,.xls,.ods,.csv",
+    options: [{ key: "bom", label: "CSV 한글 깨짐 방지", type: "select", value: "1", choices: [["1", "켜기 (엑셀에서 열 때 권장)"], ["0", "끄기"]], hint: "엑셀 → CSV로 바꿀 때만 쓰여요" }],
+    each: async (file, o) => {
+      await loadScript("vendor/xlsx.full.min.js");
+      if (extOf(file.name) === "csv") {
+        const wb = XLSX.read(await readText(file), { type: "string", raw: true });
+        const buf = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+        return [{ name: baseOf(file.name) + ".xlsx", blob: new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }) }];
+      }
+      const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      return wb.SheetNames.map(sn => ({
+        name: baseOf(file.name) + (wb.SheetNames.length > 1 ? "-" + sn : "") + ".csv",
+        blob: new Blob([(o.bom === "1" ? "﻿" : "") + XLSX.utils.sheet_to_csv(wb.Sheets[sn])], { type: "text/csv" }),
+        info: "시트: " + sn
+      }));
+    } },
+  { id: "data-convert", cat: "data", fmt: "CSV ⇄ JSON ⇄ XML ⇄ YAML", title: "데이터 형식 바꾸기", desc: "CSV, JSON, XML, YAML을 서로 자유롭게 바꿔요. 붙여넣기만 해도 돼요.", custom: dataTool },
+  { id: "markdown-html", cat: "data", fmt: "MD → HTML", title: "마크다운을 HTML로", desc: "마크다운 글을 바로 열어볼 수 있는 웹페이지(HTML)로 바꿔요.", custom: markdownTool },
+  { id: "txt-to-pdf", cat: "data", fmt: "TXT → PDF", title: "텍스트를 PDF로", desc: "메모장 텍스트 파일을 A4 PDF 문서로 만들어요. 한글도 잘 나와요.", accept: ".txt,.md,.log,.csv,.json",
+    options: [{ key: "size", label: "글자 크기", type: "select", value: "11", choices: [["9", "작게"], ["11", "보통"], ["14", "크게"]] }],
+    each: async (file, o, ctx) => { const r = await textToPdf(await readText(file), +o.size, ctx); return [{ name: baseOf(file.name) + ".pdf", blob: r.blob, info: r.pages + "쪽" }]; } },
+
+  // 오디오
+  { id: "audio-convert", cat: "audio", fmt: "WAV·M4A·FLAC·OGG → MP3 등", title: "오디오 형식 바꾸기", desc: "아이폰 녹음(M4A), WAV, FLAC 등을 MP3·WAV·M4A·OGG·FLAC로.", accept: AUD_ACCEPT,
+    options: [{ key: "format", label: "바꿀 형식", type: "select", value: "mp3", choices: [["mp3", "MP3"], ["wav", "WAV (무손실, 큼)"], ["m4a", "M4A (AAC)"], ["ogg", "OGG"], ["flac", "FLAC (무손실)"]] },
+      { key: "bitrate", label: "음질", type: "select", value: "192", choices: [["128", "128kbps (가벼움)"], ["192", "192kbps (보통)"], ["256", "256kbps"], ["320", "320kbps (최고)"]], show: o => ["mp3", "m4a", "ogg"].includes(o.format) }],
+    each: async (file, o, ctx) => {
+      const codec = { mp3: ["-c:a", "libmp3lame", "-b:a", o.bitrate + "k"], wav: ["-c:a", "pcm_s16le"], m4a: ["-c:a", "aac", "-b:a", o.bitrate + "k"], ogg: ["-c:a", "libvorbis", "-b:a", o.bitrate + "k"], flac: ["-c:a", "flac"] }[o.format];
+      const blob = await FF.run(file, o.format, (i, out) => ["-i", i, "-vn", "-map", "0:a:0", ...codec, out], ctx);
+      return [{ name: baseOf(file.name) + "." + o.format, blob }];
+    } },
+
+  // 비디오
+  { id: "video-to-mp4", cat: "video", fmt: "MOV·MKV·WEBM·AVI → MP4", title: "영상을 MP4로", desc: "아이폰 MOV나 MKV, WEBM, AVI 영상을 어디서나 재생되는 MP4로.", accept: VID_ACCEPT,
+    options: [{ key: "mode", label: "변환 방식", type: "select", value: "encode", choices: [["encode", "호환성 최우선 (H.264로 다시 인코딩)"], ["copy", "아주 빠르게 (형식만 바꾸기)"]], hint: "빠른 방식은 일부 기기에서 재생이 안 될 수 있어요" },
+      { key: "height", label: "해상도", type: "select", value: "0", choices: [["0", "원본 유지"], ["1080", "1080p"], ["720", "720p"], ["480", "480p"]], show: o => o.mode === "encode" }],
+    each: async (file, o, ctx) => {
+      const blob = await FF.run(file, "mp4", (i, out) => o.mode === "copy"
+        ? ["-i", i, "-c", "copy", "-movflags", "+faststart", out]
+        : ["-i", i, ...(+o.height ? ["-vf", "scale=-2:'min(" + o.height + ",ih)'"] : []), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "128k", "-movflags", "+faststart", out], ctx);
+      return [{ name: baseOf(file.name) + ".mp4", blob }];
+    } },
+  { id: "video-to-mp3", cat: "video", fmt: "MP4 → MP3", title: "영상에서 소리만 MP3로", desc: "동영상에서 음악이나 목소리만 뽑아 MP3로 저장해요.", accept: VID_ACCEPT,
+    options: [{ key: "bitrate", label: "음질", type: "select", value: "192", choices: [["128", "128kbps"], ["192", "192kbps"], ["320", "320kbps"]] }],
+    each: async (file, o, ctx) => {
+      const blob = await FF.run(file, "mp3", (i, out) => ["-i", i, "-vn", "-c:a", "libmp3lame", "-b:a", o.bitrate + "k", out], ctx);
+      return [{ name: baseOf(file.name) + ".mp3", blob }];
+    } },
+  { id: "video-to-gif", cat: "video", fmt: "MP4 → GIF", title: "영상을 움짤(GIF)로", desc: "영상의 원하는 구간을 GIF 움짤로 만들어요.", accept: VID_ACCEPT,
+    options: [{ key: "start", label: "시작 (초)", type: "number", value: "0", min: 0 },
+      { key: "dur", label: "길이 (초)", type: "number", value: "5", min: 1, max: 30, hint: "최대 30초" },
+      { key: "width", label: "가로 크기", type: "select", value: "480", choices: [["320", "320px"], ["480", "480px"], ["640", "640px"]] },
+      { key: "fps", label: "부드러움", type: "select", value: "12", choices: [["8", "8fps (가벼움)"], ["12", "12fps"], ["20", "20fps (부드러움)"]] }],
+    each: async (file, o, ctx) => {
+      const dur = Math.min(30, Math.max(0.5, +o.dur || 5));
+      const vf = "fps=" + o.fps + ",scale=" + o.width + ":-1:flags=lanczos,split[a][b];[a]palettegen[p];[b][p]paletteuse";
+      const blob = await FF.run(file, "gif", (i, out) => ["-ss", String(+o.start || 0), "-t", String(dur), "-i", i, "-vf", vf, "-loop", "0", out], ctx);
+      return [{ name: baseOf(file.name) + ".gif", blob }];
+    } },
+
+  // 3D
+  { id: "model-convert", cat: "3d", fmt: "STL·OBJ·FBX·GLB·STEP ⇄", title: "3D 파일 형식 바꾸기", desc: "STL, OBJ, FBX, GLB, GLTF, PLY, 3MF, DAE, STEP을 원하는 형식으로.", accept: M3D_ACCEPT,
+    options: [{ key: "format", label: "바꿀 형식", type: "select", value: "glb", choices: [["glb", "GLB (웹·게임용, 한 파일)"], ["gltf", "GLTF"], ["obj", "OBJ"], ["stl", "STL (3D 프린팅)"], ["ply", "PLY"], ["usdz", "USDZ (아이폰 AR)"]] }, unitOpt, upOpt],
+    each: conv3D() },
+  { id: "stl-to-obj", cat: "3d", fmt: "STL → OBJ", title: "STL을 OBJ로", desc: "3D 프린팅용 STL을 모델링 프로그램에서 쓰기 좋은 OBJ로.", accept: ".stl", options: [unitOpt, upOpt], each: conv3D("obj") },
+  { id: "obj-to-stl", cat: "3d", fmt: "OBJ → STL", title: "OBJ를 STL로 (3D 프린팅)", desc: "OBJ 모델을 3D 프린터 슬라이서에 넣을 수 있는 STL로.", accept: ".obj", options: [unitOpt, upOpt], each: conv3D("stl") },
+  { id: "to-glb", cat: "3d", fmt: "OBJ·FBX·STL → GLB", title: "3D 모델을 GLB로", desc: "웹사이트·게임·메타버스에 올리기 좋은 가벼운 GLB 한 파일로.", accept: ".obj,.fbx,.stl,.ply,.3mf,.dae,.gltf,.step,.stp", options: [unitOpt, upOpt], each: conv3D("glb") },
+  { id: "to-usdz", cat: "3d", fmt: "GLB·OBJ → USDZ", title: "아이폰 AR용 USDZ 만들기", desc: "아이폰·아이패드에서 바로 AR로 띄워볼 수 있는 USDZ로.", accept: ".glb,.gltf,.obj,.fbx,.stl,.dae", options: [unitOpt, upOpt], each: conv3D("usdz") },
+  { id: "step-to-stl", cat: "3d", fmt: "STEP → STL", title: "CAD(STEP)를 STL로", desc: "STEP·STP·IGES 설계 파일을 3D 프린팅용 STL로.", accept: ".step,.stp,.iges,.igs,.brep", options: [unitOpt], each: conv3D("stl") },
+  { id: "3mf-to-stl", cat: "3d", fmt: "3MF → STL", title: "3MF를 STL로", desc: "슬라이서에서 쓰는 3MF 파일을 어디서나 열리는 STL로.", accept: ".3mf", options: [unitOpt], each: conv3D("stl") },
+  { id: "uv-check", cat: "3d", fmt: "UV 확인", title: "3D 모델 UV 확인하기", desc: "UV 펼침을 보고 겹침·뒤집힘·늘어남·범위 밖 면을 찾아줘요. 체커 무늬로 3D에서도 확인해요.", custom: uvTool },
+  { id: "uv-unwrap", cat: "3d", fmt: "UV 펴기", title: "3D 모델 UV 자동으로 펴기", desc: "자동 펼치기나 박스·평면·원통·구 투영으로 UV를 새로 만들어요. 결과를 체커 무늬로 확인하고 저장해요.", custom: unwrapTool },
+
+];
+const QUICK = ["heic-to-jpg", "webp-to-jpg", "pdf-to-jpg", "jpg-to-pdf", "pdf-merge", "video-to-mp4", "video-to-mp3", "obj-to-stl", "image-compress"];
+
+/* ───────── 화면: 홈 ───────── */
+const app = $("#app");
+function renderHome() {
+  document.title = "바꿈 파일 변환기";
+  const search = h("input", { type: "search", id: "q", placeholder: "무엇을 바꿀까요? 예: heic, pdf 합치기, mp3", "aria-label": "도구 검색" });
+  const empty = h("p", { class: "empty-search" }, "찾는 변환이 없어요. 다른 말로 검색해 보세요.");
+  const sections = CATS.map(c => {
+    const tools = TOOLS.filter(t => t.cat === c.id);
+    return h("section", { class: "cat", style: "--cc:" + c.color, "data-cat": c.id },
+      h("div", { class: "cat-head" }, h("span", { class: "dot" }), h("h2", null, c.name), h("span", { class: "count" }, tools.length + "개")),
+      h("div", { class: "grid" }, tools.map(t => h("a", { class: "tool-card", href: "#" + t.id, "data-q": (t.fmt + " " + t.title + " " + t.desc + " " + (t.accept || "")).toLowerCase() },
+        h("span", { class: "fmt" }, t.fmt), h("span", { class: "t" }, t.title), h("span", { class: "d" }, t.desc)))));
+  });
+  search.addEventListener("input", () => {
+    const q = search.value.trim().toLowerCase();
+    let any = false;
+    sections.forEach(s => {
+      let n = 0;
+      s.querySelectorAll(".tool-card").forEach(a => { const hit = !q || q.split(/\s+/).every(w => a.dataset.q.includes(w)); a.classList.toggle("hidden", !hit); if (hit) n++; });
+      s.classList.toggle("hidden", !n); if (n) any = true;
+    });
+    empty.style.display = any ? "none" : "block";
+  });
+  app.replaceChildren(
+    ...(LOCAL_FILE ? [h("p", { class: "local-warn" }, "파일을 직접 열었어요. 이미지·PDF·문서·3D 변환은 되지만, 오디오·영상·STEP·UV 펴기는 사이트 주소로 열어야 작동해요.")] : []),
+    h("section", { class: "hero" },
+      h("h1", null, "파일 형식, 여기서 바로 바꾸세요"),
+      h("p", null, "사진, PDF, 엑셀, 음악, 영상, 3D 모델까지 " + TOOLS.length + "가지 변환을 무료로. 파일을 서버에 올리지 않고 지금 쓰는 브라우저 안에서 바꿔요."),
+      h("div", { class: "search" }, h("span", { html: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>' }), search),
+      h("div", { class: "quick" }, h("span", null, "많이 찾는 변환"), QUICK.map(id => { const t = TOOLS.find(x => x.id === id); return h("a", { href: "#" + id }, t.fmt); }))),
+    ...sections, empty);
+}
+
+/* ───────── 화면: 공통 파일 도구 ───────── */
+function toolHeader(t) {
+  const c = CATS.find(c => c.id === t.cat);
+  return [h("a", { class: "back", href: "#" }, "← 모든 도구"),
+    h("div", { class: "tool-title", style: "--cc:" + c.color }, h("span", { class: "fmt" }, t.fmt), h("h1", null, t.title), h("p", null, t.desc))];
+}
+function dropZone(accept, multiple, onFiles, label) {
+  const input = h("input", { type: "file", class: "hidden", accept: accept || null, multiple: multiple ? true : null, id: "file-input" });
+  const acceptText = accept ? accept.split(",").filter(a => a.startsWith(".")).slice(0, 10).map(a => a.slice(1).toUpperCase()).join(" · ") : "모든 파일";
+  const z = h("div", { class: "drop", tabindex: "0", role: "button", "aria-label": "파일 고르기" },
+    h("strong", null, label || "파일을 여기로 끌어다 놓거나 눌러서 고르세요"),
+    h("span", null, multiple ? "여러 개를 한 번에 올려도 돼요" : "파일 하나를 올려 주세요"),
+    acceptText ? h("span", { class: "accept" }, acceptText) : null, input);
+  z.addEventListener("click", e => { if (e.target !== input) input.click(); });
+  z.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); input.click(); } });
+  input.addEventListener("change", () => { onFiles([...input.files]); input.value = ""; });
+  z.addEventListener("dragover", e => { e.preventDefault(); z.classList.add("over"); });
+  z.addEventListener("dragleave", () => z.classList.remove("over"));
+  z.addEventListener("drop", e => { e.preventDefault(); z.classList.remove("over"); onFiles([...e.dataTransfer.files]); });
+  return z;
+}
+function acceptsFile(accept, f) {
+  if (!accept) return true;
+  const ext = "." + extOf(f.name);
+  return accept.split(",").some(a => { a = a.trim().toLowerCase(); if (a.startsWith(".")) return a === ext; if (a.endsWith("/*")) return (f.type || "").startsWith(a.slice(0, -1)); return f.type === a; });
+}
+function renderOptions(t, state) {
+  if (!t.options || !t.options.length) return null;
+  const box = h("div", { class: "opts" });
+  const draw = () => {
+    box.replaceChildren(...t.options.filter(op => !op.show || op.show(state.opts)).map(op => {
+      const id = "opt-" + op.key;
+      const set = v => { state.opts[op.key] = v; draw(); };
+      let ctl;
+      if (op.type === "select") {
+        ctl = h("select", { id, onchange: e => set(e.target.value) }, op.choices.map(([v, l]) => h("option", { value: v, selected: String(state.opts[op.key]) === v }, l)));
+      } else if (op.type === "range") {
+        const out = h("span", { class: "hint" }, state.opts[op.key] + (op.suffix || ""));
+        ctl = h("div", null, h("input", { id, type: "range", min: op.min, max: op.max, value: state.opts[op.key], oninput: e => { state.opts[op.key] = +e.target.value; out.textContent = e.target.value + (op.suffix || ""); } }), out);
+      } else if (op.type === "checks") {
+        ctl = h("div", { class: "checks", id }, op.choices.map(v => h("label", null, h("input", { type: "checkbox", value: v, checked: state.opts[op.key].includes(v),
+          onchange: e => { const s = new Set(state.opts[op.key]); e.target.checked ? s.add(v) : s.delete(v); state.opts[op.key] = [...s]; } }), v)));
+      } else {
+        ctl = h("input", { id, type: op.type, value: state.opts[op.key], placeholder: op.placeholder || null, min: op.min ?? null, max: op.max ?? null, oninput: e => { state.opts[op.key] = e.target.value; } });
+      }
+      return h("div", { class: "opt" }, op.type === "checks" ? h("span", { class: "lbl" }, op.label) : h("label", { for: id }, op.label), ctl, op.hint ? h("span", { class: "hint" }, op.hint) : null);
+    }));
+  };
+  draw();
+  return box;
+}
+function resultCard(r) {
+  return h("div", { class: "file" }, makePreview(r.blob, r.name),
+    h("div", { class: "meta" }, h("span", { class: "name" }, r.name),
+      h("span", { class: "size" }, fmtSize(r.blob.size) + (r.info ? " · " + r.info : "")),
+      h("div", { class: "row" }, h("button", { class: "btn small", onclick: () => saveFile(r.name, r.blob) }, "저장"))));
+}
+function progressBox() {
+  const fill = h("i"), lbl = h("span", { class: "lbl" });
+  const el = h("div", { class: "progress", role: "status" }, h("div", { class: "bar" }, fill), lbl);
+  return { el, set(text, frac) { el.classList.add("on"); lbl.textContent = text; if (frac != null) fill.style.width = Math.round(Math.max(0, Math.min(1, frac)) * 100) + "%"; }, done() { el.classList.remove("on"); fill.style.width = "0"; } };
+}
+function renderFileTool(t) {
+  const state = { files: [], opts: {}, busy: false };
+  (t.options || []).forEach(o => { state.opts[o.key] = Array.isArray(o.value) ? [...o.value] : o.value; });
+  const multiple = true;
+  const list = h("div", { class: "files" });
+  const filesPanel = h("div", { class: "panel hidden" }, h("h3", null, h("span", { id: "file-count" }), h("button", { class: "btn small danger", onclick: () => { state.files = []; drawFiles(); } }, "모두 지우기")), list);
+  const results = h("div", { class: "files" });
+  const resHead = h("h3", null);
+  const resPanel = h("div", { class: "panel hidden" }, resHead, results);
+  const prog = progressBox();
+  const go = h("button", { class: "btn primary", disabled: true }, "변환하기");
+  const note = h("span", { class: "note" });
+
+  function drawFiles() {
+    list.replaceChildren(...state.files.map((f, i) => h("div", { class: "file" }, makePreview(f, f.name),
+      h("div", { class: "meta" }, h("span", { class: "name" }, (t.sortable ? (i + 1) + ". " : "") + f.name), h("span", { class: "size" }, fmtSize(f.size)),
+        h("div", { class: "row" },
+          t.sortable ? h("button", { class: "btn small", disabled: i === 0, "aria-label": "앞으로", onclick: () => { [state.files[i - 1], state.files[i]] = [state.files[i], state.files[i - 1]]; drawFiles(); } }, "←") : null,
+          t.sortable ? h("button", { class: "btn small", disabled: i === state.files.length - 1, "aria-label": "뒤로", onclick: () => { [state.files[i + 1], state.files[i]] = [state.files[i], state.files[i + 1]]; drawFiles(); } }, "→") : null,
+          h("button", { class: "btn small danger", onclick: () => { state.files.splice(i, 1); drawFiles(); } }, "빼기"))))));
+    filesPanel.classList.toggle("hidden", !state.files.length);
+    $("#file-count", filesPanel).textContent = "올린 파일 " + state.files.length + "개" + (t.sortable ? " · 이 순서대로 합쳐져요" : "");
+    const min = t.minFiles || 1;
+    go.disabled = state.busy || state.files.length < min;
+    note.textContent = state.files.length && state.files.length < min ? "파일을 " + min + "개 이상 올려 주세요." : "";
+  }
+  function addFiles(fs) {
+    const ok = fs.filter(f => acceptsFile(t.accept, f));
+    if (ok.length < fs.length) toast((fs.length - ok.length) + "개는 이 도구에서 지원하지 않는 형식이라 뺐어요");
+    state.files.push(...ok); drawFiles();
+  }
+  go.addEventListener("click", async () => {
+    state.busy = true; go.disabled = true; go.textContent = "변환 중…";
+    results.replaceChildren(); resPanel.classList.remove("hidden");
+    resHead.replaceChildren("변환하는 중이에요…");
+    const all = [];
+    const files = [...state.files];
+    const mkCtx = (i, n) => ({ status: (text, frac) => prog.set((n > 1 ? "[" + (i + 1) + "/" + n + "] " : "") + text, frac == null ? null : (i + frac) / n) });
+    try {
+      if (t.all) {
+        try { const rs = await t.all(files, state.opts, mkCtx(0, 1)); rs.forEach(r => { all.push(r); results.append(resultCard(r)); }); }
+        catch (e) { results.append(errorCard("변환 실패", e)); }
+      } else {
+        for (const [i, f] of files.entries()) {
+          const ctx = mkCtx(i, files.length);
+          ctx.status(f.name + " 처리 중…", 0);
+          try { const rs = await t.each(f, state.opts, ctx); rs.forEach(r => { all.push(r); results.append(resultCard(r)); }); }
+          catch (e) { results.append(errorCard(f.name, e)); }
+          await sleep(0);
+        }
+      }
+    } finally {
+      prog.done(); state.busy = false; go.textContent = "변환하기"; drawFiles();
+    }
+    resHead.replaceChildren(...[h("span", null, all.length ? "결과 " + all.length + "개 · 저장 버튼을 눌러 받으세요" : "결과가 없어요"),
+      all.length > 1 ? h("button", { class: "btn small", onclick: () => saveAllZip(all, t.id + "-결과.zip") }, "전부 ZIP으로 저장") : null].filter(Boolean));
+    resPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
+
+  const optsEl = renderOptions(t, state);
+  app.replaceChildren(h("div", { class: "tool-view" }, ...toolHeader(t),
+    dropZone(t.accept, multiple, addFiles), filesPanel,
+    optsEl ? h("div", { class: "panel" }, h("h3", null, "옵션"), optsEl) : null,
+    h("div", { class: "actions" }, go, note), prog.el, resPanel));
+  drawFiles();
+}
+function errorCard(name, e) {
+  return h("div", { class: "file err" }, h("div", { class: "pv" }, placeholder("!", "실패")),
+    h("div", { class: "meta" }, h("span", { class: "name" }, name), h("span", { class: "errmsg" }, (e && e.message) || String(e))));
+}
+
+/* ───────── TXT → PDF ───────── */
+async function textToPdf(text, pt, ctx) {
+  const { PDFDocument } = await pdfLib();
+  const FONT = '"IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif';
+  const DPI = 150, PW = Math.round(8.27 * DPI), PH = Math.round(11.69 * DPI), M = Math.round(0.8 * DPI);
+  const px = Math.round(pt * DPI / 72), lh = Math.round(px * 1.65), maxW = PW - 2 * M;
+  try { await document.fonts.load(px + "px " + FONT); } catch (_) {}
+  const meas = canvasOf(10, 10).getContext("2d"); meas.font = px + "px " + FONT;
+  const lines = [];
+  for (const para of text.replace(/\r\n?/g, "\n").replace(/\t/g, "    ").split("\n")) {
+    let cur = "";
+    for (const ch of para) {
+      if (cur && meas.measureText(cur + ch).width > maxW) {
+        const sp = cur.lastIndexOf(" ");
+        if (sp > 0 && /\S/.test(ch) && cur.length - sp < 24 && /[A-Za-z0-9]$/.test(cur)) { lines.push(cur.slice(0, sp)); cur = cur.slice(sp + 1) + ch; }
+        else { lines.push(cur); cur = ch === " " ? "" : ch; }
+      } else cur += ch;
+    }
+    lines.push(cur);
+  }
+  const per = Math.floor((PH - 2 * M) / lh), pages = Math.max(1, Math.ceil(lines.length / per));
+  const pdf = await PDFDocument.create();
+  for (let p = 0; p < pages; p++) {
+    ctx && ctx.status("PDF 페이지 만드는 중 (" + (p + 1) + "/" + pages + ")", p / pages);
+    const c = canvasOf(PW, PH), g = c.getContext("2d");
+    g.fillStyle = "#fff"; g.fillRect(0, 0, PW, PH);
+    g.fillStyle = "#111"; g.font = px + "px " + FONT; g.textBaseline = "top";
+    lines.slice(p * per, (p + 1) * per).forEach((ln, i) => g.fillText(ln, M, M + i * lh));
+    g.fillStyle = "#888"; g.font = Math.round(px * 0.8) + "px " + FONT; g.textAlign = "center";
+    g.fillText((p + 1) + " / " + pages, PW / 2, PH - M / 2);
+    const img = await pdf.embedJpg(await (await toBlob(c, "image/jpeg", 0.9)).arrayBuffer());
+    const pg = pdf.addPage([595.28, 841.89]);
+    pg.drawImage(img, { x: 0, y: 0, width: 595.28, height: 841.89 });
+    await sleep(0);
+  }
+  return { blob: new Blob([await pdf.save()], { type: "application/pdf" }), pages };
+}
+
+/* ───────── 맞춤 도구: 데이터 형식 ───────── */
+function guessFmt(name, text) {
+  const e = extOf(name || "");
+  if (e === "yml" || e === "yaml") return "yaml";
+  if (["csv", "tsv", "json", "xml"].includes(e)) return e === "tsv" ? "csv" : e;
+  const t = (text || "").trim();
+  if (t.startsWith("<")) return "xml";
+  if (t.startsWith("{") || t.startsWith("[")) return "json";
+  return null;
+}
+function dataTable(data) {
+  const { keys, rows } = dataToTable(data);
+  if (!rows.length || !keys.length) return h("p", { class: "note" }, "표로 보여줄 데이터가 없어요.");
+  return h("div", { class: "tablewrap" }, h("table", null, h("tr", null, keys.map(k => h("th", null, k))),
+    rows.slice(0, 200).map(r => h("tr", null, keys.map(k => h("td", null, r[k] == null ? "" : String(r[k])))))));
+}
+function dataTool(t) {
+  const FMTS = [["csv", "CSV"], ["json", "JSON"], ["xml", "XML"], ["yaml", "YAML"]];
+  const SAMPLE = "이름,도시,나이,가입일\n김민준,서울,29,2024-03-11\n이서연,부산,34,2023-11-02\n박지호,대구,25,2025-01-20\n최수아,인천,41,2022-07-15";
+  const fromSel = h("select", { id: "from-fmt", "aria-label": "원래 형식" }, FMTS.map(([v, l]) => h("option", { value: v }, l)));
+  const toSel = h("select", { id: "to-fmt", "aria-label": "바꿀 형식" }, FMTS.map(([v, l]) => h("option", { value: v, selected: v === "json" }, l)));
+  const src = h("textarea", { id: "data-in", spellcheck: "false", "aria-label": "원본 데이터" }, SAMPLE);
+  const out = h("textarea", { id: "data-out", spellcheck: "false", readonly: true, "aria-label": "변환 결과" });
+  const err = h("div", { class: "errline" });
+  const tableBox = h("div");
+  const fileIn = h("input", { type: "file", class: "hidden", accept: ".csv,.tsv,.json,.xml,.yaml,.yml,.txt" });
+  let srcName = "data", timer, lastData = null;
+  async function run() {
+    err.textContent = "";
+    try {
+      lastData = await parseData(src.value, fromSel.value);
+      out.value = lastData == null ? "" : await writeData(lastData, toSel.value);
+      tableBox.replaceChildren(lastData == null ? "" : dataTable(lastData));
+    } catch (e) { err.textContent = e.message; out.value = ""; tableBox.replaceChildren(); }
+  }
+  const later = () => { clearTimeout(timer); timer = setTimeout(run, 250); };
+  src.addEventListener("input", () => { const g = guessFmt(null, src.value); if (g && g !== fromSel.value && g !== "csv") fromSel.value = g; later(); });
+  fromSel.addEventListener("change", run); toSel.addEventListener("change", run);
+  fileIn.addEventListener("change", async () => {
+    const f = fileIn.files[0]; if (!f) return;
+    srcName = baseOf(f.name);
+    src.value = await readText(f);
+    fromSel.value = guessFmt(f.name, src.value) || fromSel.value;
+    if (toSel.value === fromSel.value) toSel.value = fromSel.value === "json" ? "csv" : "json";
+    fileIn.value = ""; run();
+  });
+  const drop = e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { const dt = new DataTransfer(); dt.items.add(f); fileIn.files = dt.files; fileIn.dispatchEvent(new Event("change")); } };
+  src.addEventListener("dragover", e => e.preventDefault()); src.addEventListener("drop", drop);
+  app.replaceChildren(h("div", { class: "tool-view" }, ...toolHeader(t),
+    h("div", { class: "panel" },
+      h("div", { class: "split" },
+        h("div", { class: "pane" }, h("div", { class: "pane-head" }, h("span", null, "원본 ", fromSel), h("button", { class: "btn small", onclick: () => fileIn.click() }, "파일 열기")), src, fileIn,
+          h("span", { class: "note" }, "붙여넣거나 파일을 끌어다 놓으세요. 예시 데이터가 들어 있어요.")),
+        h("div", { class: "pane" }, h("div", { class: "pane-head" }, h("span", null, "결과 ", toSel),
+          h("span", { class: "actions" }, h("button", { class: "btn small", onclick: () => copyText(out.value) }, "복사"),
+            h("button", { class: "btn small", onclick: () => { if (out.value) saveFile(srcName + "." + toSel.value, new Blob([(toSel.value === "csv" ? "﻿" : "") + out.value], { type: "text/plain" })); } }, "저장"))), out, err)),
+      h("h3", null, "표로 미리보기"), tableBox)));
+  run();
+}
+
+/* ───────── 맞춤 도구: 마크다운 ───────── */
+function markdownTool(t) {
+  const SAMPLE = "# 회의록 — 11월 첫째 주\n\n**참석:** 민준, 서연, 지호\n\n## 결정한 것\n\n1. 파일 변환 사이트는 **무료 기능만** 먼저 연다\n2. 디자인은 다음 주 수요일까지 확정\n\n## 할 일\n\n- [ ] 도메인 알아보기\n- [ ] 자주 쓰는 변환 순서 정하기\n\n> 서버 없이 브라우저에서만 변환하니까 운영비가 0원이에요.\n\n| 변환 | 우선순위 |\n|---|---|\n| HEIC → JPG | 높음 |\n| PDF 합치기 | 높음 |\n| MP4 → GIF | 보통 |\n\n`코드`도 이렇게 들어가요.";
+  const src = h("textarea", { id: "md-in", spellcheck: "false", "aria-label": "마크다운 입력" }, SAMPLE);
+  const frame = h("iframe", { sandbox: "", title: "HTML 미리보기" });
+  const fileIn = h("input", { type: "file", class: "hidden", accept: ".md,.markdown,.txt" });
+  let name = "document", html = "";
+  const CSS = "body{font-family:-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;max-width:760px;margin:40px auto;padding:0 20px;line-height:1.7;color:#1b1d22}h1,h2,h3{line-height:1.3}code{background:#f1f2f5;padding:2px 5px;border-radius:4px}pre{background:#f1f2f5;padding:14px;border-radius:8px;overflow:auto}pre code{background:none;padding:0}blockquote{margin:0;padding-left:14px;border-left:3px solid #cfd3dc;color:#555}table{border-collapse:collapse}td,th{border:1px solid #dcdfe6;padding:6px 10px}img{max-width:100%}";
+  async function run() {
+    await loadScript("vendor/marked.min.js");
+    await loadScript("vendor/purify.min.js");
+    // 마크다운 안에 숨은 스크립트·이벤트 속성은 걸러내요 (내려받은 HTML을 열어도 안전하게)
+    const body = DOMPurify.sanitize(marked.parse(src.value, { mangle: false, headerIds: false }), { FORBID_TAGS: ["style", "form", "input", "button", "textarea", "select"], FORBID_ATTR: ["style"] });
+    const title = (src.value.match(/^#\s+(.+)$/m) || [, name])[1].trim();
+    html = "<!DOCTYPE html>\n<html lang=\"ko\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>" + title.replace(/</g, "&lt;") + "</title>\n<style>" + CSS + "</style>\n</head>\n<body>\n" + body + "</body>\n</html>\n";
+    frame.srcdoc = html;
+  }
+  let timer;
+  src.addEventListener("input", () => { clearTimeout(timer); timer = setTimeout(run, 250); });
+  fileIn.addEventListener("change", async () => { const f = fileIn.files[0]; if (!f) return; name = baseOf(f.name); src.value = await readText(f); fileIn.value = ""; run(); });
+  src.addEventListener("dragover", e => e.preventDefault());
+  src.addEventListener("drop", async e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { name = baseOf(f.name); src.value = await readText(f); run(); } });
+  app.replaceChildren(h("div", { class: "tool-view" }, ...toolHeader(t),
+    h("div", { class: "panel" }, h("div", { class: "split" },
+      h("div", { class: "pane" }, h("div", { class: "pane-head" }, h("span", null, "마크다운"), h("button", { class: "btn small", onclick: () => fileIn.click() }, "파일 열기")), src, fileIn),
+      h("div", { class: "pane" }, h("div", { class: "pane-head" }, h("span", null, "미리보기"),
+        h("span", { class: "actions" }, h("button", { class: "btn small", onclick: () => copyText(html) }, "HTML 복사"),
+          h("button", { class: "btn small", onclick: () => saveFile(name + ".html", new Blob([html], { type: "text/html" })) }, "HTML 저장"))), frame)))));
+  run().catch(e => toast(e.message));
+}
+
+/* ───────── 맞춤 도구: Base64 ───────── */
+function base64Tool(t) {
+  const tabA = h("button", { role: "tab", "aria-selected": "true" }, "이미지 → Base64");
+  const tabB = h("button", { role: "tab", "aria-selected": "false" }, "Base64 → 이미지");
+  const paneA = h("div", { class: "pane" }), paneB = h("div", { class: "pane hidden" });
+  const sw = a => { tabA.setAttribute("aria-selected", a); tabB.setAttribute("aria-selected", !a); paneA.classList.toggle("hidden", !a); paneB.classList.toggle("hidden", a); };
+  tabA.onclick = () => sw(true); tabB.onclick = () => sw(false);
+  // A
+  const outA = h("textarea", { id: "b64-out", readonly: true, style: "min-height:180px;font-family:var(--font-mono);font-size:12px", "aria-label": "Base64 결과" });
+  const prefix = h("input", { type: "checkbox", id: "b64-prefix", checked: true });
+  const infoA = h("span", { class: "note" });
+  const pvA = h("div", { style: "max-width:260px" });
+  let dataUrl = "", fname = "image";
+  const refresh = () => { outA.value = prefix.checked ? dataUrl : dataUrl.replace(/^data:[^,]*,/, ""); infoA.textContent = dataUrl ? "글자 수 " + outA.value.length.toLocaleString() + "자" : ""; };
+  prefix.onchange = refresh;
+  const onFiles = fs => {
+    const f = fs[0]; if (!f) return;
+    fname = baseOf(f.name);
+    const rd = new FileReader();
+    rd.onload = () => { dataUrl = rd.result; refresh(); pvA.replaceChildren(h("div", { class: "file" }, makePreview(f, f.name), h("div", { class: "meta" }, h("span", { class: "name" }, f.name), h("span", { class: "size" }, fmtSize(f.size))))); };
+    rd.readAsDataURL(f);
+  };
+  paneA.append(dropZone(IMG_ACCEPT, false, onFiles, "이미지를 끌어다 놓거나 눌러서 고르세요"), pvA,
+    h("label", { class: "checks", for: "b64-prefix", style: "font-family:var(--font-body)" }, prefix, "data:image/… 앞부분 포함 (HTML·CSS에 바로 붙일 때)"),
+    outA, h("div", { class: "actions" }, h("button", { class: "btn", onclick: () => outA.value && copyText(outA.value) }, "복사"),
+      h("button", { class: "btn", onclick: () => outA.value && saveFile(fname + "-base64.txt", new Blob([outA.value], { type: "text/plain" })) }, "TXT로 저장"), infoA));
+  // B
+  const inB = h("textarea", { id: "b64-in", placeholder: "data:image/png;base64,… 또는 Base64 문자열을 붙여넣으세요", style: "min-height:180px;font-family:var(--font-mono);font-size:12px", "aria-label": "Base64 입력" });
+  const pvB = h("div", { style: "max-width:260px" });
+  const errB = h("div", { class: "errline" });
+  let blobB = null, extB = "png";
+  const MAGIC = [[[0x89, 0x50, 0x4e, 0x47], "png"], [[0xff, 0xd8, 0xff], "jpg"], [[0x47, 0x49, 0x46], "gif"], [[0x52, 0x49, 0x46, 0x46], "webp"], [[0x3c], "svg"], [[0x42, 0x4d], "bmp"]];
+  inB.addEventListener("input", () => {
+    errB.textContent = ""; pvB.replaceChildren(); blobB = null;
+    let s = inB.value.trim(); if (!s) return;
+    let mime = null;
+    const m = s.match(/^data:([^;,]+)?(;base64)?,/); if (m) { mime = m[1]; s = s.slice(m[0].length); }
+    try {
+      const bin = atob(s.replace(/\s/g, "").replace(/-/g, "+").replace(/_/g, "/"));
+      const u8 = Uint8Array.from(bin, c => c.charCodeAt(0));
+      extB = (mime && { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp", "image/svg+xml": "svg", "image/bmp": "bmp" }[mime]) || (MAGIC.find(([sig]) => sig.every((b, i) => u8[i] === b)) || [, "png"])[1];
+      blobB = new Blob([u8], { type: mime || "image/" + (extB === "jpg" ? "jpeg" : extB === "svg" ? "svg+xml" : extB) });
+      pvB.replaceChildren(h("div", { class: "file" }, makePreview(blobB, "image." + extB), h("div", { class: "meta" }, h("span", { class: "name" }, "image." + extB), h("span", { class: "size" }, fmtSize(blobB.size)))));
+    } catch { errB.textContent = "Base64 문자열이 올바르지 않아요. 앞뒤가 잘리지 않았는지 확인해 주세요."; }
+  });
+  paneB.append(inB, errB, pvB, h("div", { class: "actions" }, h("button", { class: "btn", onclick: () => blobB ? saveFile("image." + extB, blobB) : toast("먼저 Base64를 붙여넣어 주세요") }, "이미지 저장")));
+  app.replaceChildren(h("div", { class: "tool-view" }, ...toolHeader(t), h("div", { class: "panel" }, h("div", { class: "tabs", role: "tablist" }, tabA, tabB), paneA, paneB)));
+}
+
+/* ───────── 맞춤 도구: PDF 페이지 정리 ───────── */
+function pdfPagesTool(t) {
+  const grid = h("div", { class: "pages" });
+  const panel = h("div", { class: "panel hidden" });
+  const resPanel = h("div", { class: "panel hidden" });
+  const prog = progressBox();
+  let file = null, pages = [];
+  const save = h("button", { class: "btn primary" }, "새 PDF 만들기");
+  function draw() {
+    grid.replaceChildren(...pages.map((p, i) => {
+      p.canvas.style.transform = "rotate(" + p.rot + "deg)" + (p.rot % 180 ? " scale(" + Math.min(p.canvas.width, p.canvas.height) / Math.max(p.canvas.width, p.canvas.height) + ")" : "");
+      return h("div", { class: "page" + (p.del ? " del" : "") }, h("div", { class: "pv" }, p.canvas),
+        h("div", { class: "ctrl" }, h("span", { class: "num" }, (i + 1) + (p.orig !== i ? " (원래 " + (p.orig + 1) + ")" : "")),
+          h("span", { class: "actions", style: "gap:4px" },
+            h("button", { class: "btn small", title: "앞으로", "aria-label": (i + 1) + "쪽 앞으로", disabled: i === 0, onclick: () => { [pages[i - 1], pages[i]] = [pages[i], pages[i - 1]]; draw(); } }, "←"),
+            h("button", { class: "btn small", title: "뒤로", "aria-label": (i + 1) + "쪽 뒤로", disabled: i === pages.length - 1, onclick: () => { [pages[i + 1], pages[i]] = [pages[i], pages[i + 1]]; draw(); } }, "→"),
+            h("button", { class: "btn small", title: "오른쪽으로 90도 돌리기", "aria-label": (i + 1) + "쪽 회전", onclick: () => { p.rot = (p.rot + 90) % 360; draw(); } }, "↻"),
+            h("button", { class: "btn small danger", title: p.del ? "되살리기" : "지우기", "aria-label": (i + 1) + "쪽 " + (p.del ? "되살리기" : "지우기"), onclick: () => { p.del = !p.del; draw(); } }, p.del ? "↺" : "✕"))));
+    }));
+    const keep = pages.filter(p => !p.del).length;
+    $("#pg-sum", panel).textContent = "전체 " + pages.length + "쪽 · 남길 페이지 " + keep + "쪽";
+    save.disabled = !keep;
+  }
+  async function open(fs) {
+    const f = fs.find(x => extOf(x.name) === "pdf"); if (!f) { toast("PDF 파일을 올려 주세요"); return; }
+    file = f; pages = []; resPanel.classList.add("hidden");
+    try {
+      const doc = await openPdf(f);
+      for (let i = 0; i < doc.numPages; i++) {
+        prog.set("페이지 미리보기 만드는 중 (" + (i + 1) + "/" + doc.numPages + ")", i / doc.numPages);
+        const pg = await doc.getPage(i + 1);
+        const vp = pg.getViewport({ scale: 1 });
+        pages.push({ orig: i, rot: 0, del: false, canvas: await renderPage(pg, 240 / vp.width, true) });
+      }
+      doc.destroy();
+      panel.classList.remove("hidden"); draw();
+    } catch (e) { toast(e.message); }
+    prog.done();
+  }
+  save.addEventListener("click", async () => {
+    save.disabled = true;
+    try {
+      const { PDFDocument, degrees } = await pdfLib();
+      const src = await loadPdfLib(file);
+      const out = await PDFDocument.create();
+      const keep = pages.filter(p => !p.del);
+      const copied = await out.copyPages(src, keep.map(p => p.orig));
+      copied.forEach((pg, i) => { const r = (pg.getRotation().angle + keep[i].rot) % 360; pg.setRotation(degrees(r)); out.addPage(pg); });
+      const r = { name: baseOf(file.name) + "-편집.pdf", blob: new Blob([await out.save()], { type: "application/pdf" }), info: keep.length + "쪽" };
+      resPanel.replaceChildren(h("h3", null, "결과 · 저장 버튼을 눌러 받으세요"), h("div", { class: "files" }, resultCard(r)));
+      resPanel.classList.remove("hidden"); resPanel.scrollIntoView({ behavior: "smooth", block: "start" });
+    } catch (e) { toast(e.message); }
+    save.disabled = false;
+  });
+  panel.append(h("h3", null, h("span", { id: "pg-sum" }),
+    h("span", { class: "actions" }, h("button", { class: "btn small", onclick: () => { pages.forEach(p => p.rot = (p.rot + 90) % 360); draw(); } }, "전체 회전"),
+      h("button", { class: "btn small", onclick: () => { pages.sort((a, b) => a.orig - b.orig); pages.forEach(p => { p.rot = 0; p.del = false; }); draw(); } }, "처음 상태로"))),
+    grid, h("div", { class: "actions" }, save));
+  app.replaceChildren(h("div", { class: "tool-view" }, ...toolHeader(t), dropZone(".pdf", false, open, "정리할 PDF를 끌어다 놓거나 눌러서 고르세요"), prog.el, panel, resPanel));
+}
+
+/* ───────── 라우팅 ───────── */
+let cleanup = null;
+function route() {
+  revokeAll();
+  if (cleanup) { try { cleanup(); } catch (_) {} cleanup = null; }
+  document.querySelectorAll(".modal").forEach(m => m.remove());
+  const id = location.hash.slice(1);
+  const t = TOOLS.find(x => x.id === id);
+  if (!t) { renderHome(); return; }
+  document.title = t.fmt + " · 바꿈";
+  if (t.custom) t.custom(t); else renderFileTool(t);
+  window.scrollTo(0, 0);
+}
+window.addEventListener("hashchange", route);
+document.addEventListener("paste", e => {
+  const fs = [...(e.clipboardData && e.clipboardData.files || [])];
+  const inp = $("#file-input");
+  if (fs.length && inp && !/TEXTAREA|INPUT/.test(document.activeElement.tagName)) { const dt = new DataTransfer(); fs.forEach(f => dt.items.add(f)); inp.files = dt.files; inp.dispatchEvent(new Event("change")); }
+});
+route();
+getDownloads();
+</script>
+</body>
+</html>
